@@ -356,4 +356,21 @@ async def on_start():
 
 The repo for all of these apps: https://github.com/DAE51D/vobot-apps 
 
-you have `gh` CLI command available too.
+You have `gh` CLI installed at `C:\Program Files\GitHub CLI\gh.exe`. Since it's not in PATH, use the full path with the call operator:
+
+```powershell
+&"C:\Program Files\GitHub CLI\gh.exe" <command>
+```
+
+Example:
+```powershell
+&"C:\Program Files\GitHub CLI\gh.exe" repo edit DAE51D/vobot-apps --visibility public --accept-visibility-change-consequences
+```
+
+To add `gh` to the user path:
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\GitHub CLI", "User")
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
+gh --version
+```
