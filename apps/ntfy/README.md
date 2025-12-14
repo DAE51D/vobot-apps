@@ -17,6 +17,33 @@ Displays push notifications from an ntfy server on your Vobot Mini Dock. Navigat
 - Priority indicator with colored dot and label (Min/Low/Normal/High/Critical)
 - "NEW" badge appears on new message, auto-hides after 5s or on navigation
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+<img src="../../ntfy_web_page.png" alt="Web configuration page" />
+<p align="center"><em>Web Setup Interface</em></p>
+</td>
+<td width="50%">
+<img src="../../ntfy_normal_message.jpg" alt="Normal priority message" />
+<p align="center"><em>Normal Priority (Green)</em></p>
+</td>
+</tr>
+<tr>
+<td width="50%">
+<img src="../../ntfy_high_message.jpg" alt="High priority message" />
+<p align="center"><em>High Priority (Orange)</em></p>
+</td>
+<td width="50%">
+<img src="../../ntfy_critical_message.jpg" alt="Critical priority message" />
+<p align="center"><em>Critical Priority (Red)</em></p>
+</td>
+</tr>
+</table>
+
+
+
 ## Requirements
 
 - Vobot Mini Dock with Developer Mode enabled
