@@ -7,7 +7,7 @@ import urequests as requests
 import ujson
 import utime
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 NAME = "ntfy"
 ICON = "A:apps/ntfy/resources/icon.png"
 
@@ -17,11 +17,9 @@ MAX_MESSAGES = 5
 
 scr = None
 label_title = None
-label_status = None
 label_info = None
-label_counter = None
 
-last_fetch_time = 0
+last_fetch_time = -999  # Force first fetch immediately
 fetch_interval = 10
 messages = []
 current_index = 0
@@ -84,14 +82,17 @@ def format_time(timestamp):
 
 def update_display():
     """Update UI with current message"""
-    global messages, current_index, label_info, label_counter, label_status, separator_line
+    global messages, current_index, label_info, separator_line
     
     if not messages or current_index >= len(messages):
         label_info.set_text("No messages yet.\n\nWaiting for notifications...")
         label_info.set_style_text_color(lv.color_hex(0x808080), lv.PART.MAIN)  # Dim gray
-        label_counter.set_text("0/0")
-        label_status.set_text("IDLE")
-        label_status.set_style_text_color(lv.color_hex(0x808080), lv.PART.MAIN)
+        # Separator line blue when idle
+        try:
+            if separator_line:
+                separator_line.set_style_line_color(lv.color_hex(0x4488FF), 0)  # Blue
+        except Exception:
+            pass
         return
     
     msg = messages[current_index]
@@ -112,44 +113,37 @@ def update_display():
         5: 0xFF4444,  # red
         4: 0xFFA500,  # orange
         3: 0x00FF88,  # green
-        2: 0x3399FF,  # blue
-        1: 0x808080   # gray
+        2: 0xFFFFFF,  # white (low)
+        1: 0xFFFFFF   # white (min)
     }.get(prio, 0x00FF88)
     
-    # Build multi-line header: priority, message counter, date time
-    header_lines = [
-        f"{prio_name}",
-        f"Message #{current_index + 1}/{len(messages)}",
-        f"{time_str}",
-    ]
+    # Condensed single-line header: [1/1] Normal - 12/14 9:25 PM
+    header = f"[{current_index + 1}/{len(messages)}] {prio_name} - {time_str}"
     
     # Get message content
     title = msg.get('title', '')
     body = msg.get('message', '')
     
-    # Build display with title (if present) and body
-    header = "\n".join(header_lines)
+    # Build display: header, optional title (bold if present), body
     if title and body:
+        # Title on its own line, then body. Try to bold title.
         display = f"{header}\n\n{title}\n{body}"
     elif title:
+        # Only title, no body
         display = f"{header}\n\n{title}"
     elif body:
+        # Only body
         display = f"{header}\n\n{body}"
     else:
         display = f"{header}\n\n(no content)"
     
     # Truncate if too long
-    if len(display) > 180:
-        display = display[:177] + "..."
+    if len(display) > 200:
+        display = display[:197] + "..."
     
     label_info.set_text(display)
     label_info.set_style_text_color(lv.color_hex(0xFFFFFF), lv.PART.MAIN)  # Bright white for content
-    # Counter now integrated in header; clear standalone counter
-    try:
-        label_counter.set_text("")
-    except Exception:
-        pass
-
+    
     # Color the separator line based on priority
     try:
         if separator_line:
@@ -159,7 +153,7 @@ def update_display():
 
 async def on_start(app_mgr=None):
     """Called when app starts - just set up UI"""
-    global scr, label_title, label_status, label_info, label_counter, separator_line
+    global scr, label_title, label_info, separator_line
     print("=== ntfy on_start() ===")
     
     try:
@@ -191,13 +185,6 @@ async def on_start(app_mgr=None):
         label_title.set_text(f"{NTFY_SERVER}/{NTFY_TOPIC}")
         label_title.set_pos(10, 8)
         label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)  # Greenish by default
-        # Note: font_montserrat_18 might not be available, using default
-        
-        # Status indicator (left) - will be colored based on state
-        label_status = lv.label(scr)
-        label_status.set_text("...")
-        label_status.set_pos(10, 35)
-        label_status.set_style_text_color(lv.color_hex(0x808080), lv.PART.MAIN)  # Gray initially
 
         # New message badge (hidden by default)
         try:
@@ -210,30 +197,22 @@ async def on_start(app_mgr=None):
         except Exception as _:
             pass
         
-        # Message counter (right aligned)
-        label_counter = lv.label(scr)
-        label_counter.set_text("")
-        label_counter.align(lv.ALIGN.TOP_RIGHT, -10, 35)
-        label_counter.set_style_text_color(lv.color_hex(0xFFFFFF), lv.PART.MAIN)  # White
-        
-        # Separator line (tighter spacing under the title)
-        line_points = [{"x": 10, "y": 48}, {"x": 310, "y": 48}]
+        # Separator line (under title)
+        line_points = [{"x": 10, "y": 30}, {"x": 310, "y": 30}]
         separator_line = lv.line(scr)
         separator_line.set_points(line_points, len(line_points))
         separator_line.set_style_line_width(3, 0)
-        separator_line.set_style_line_color(lv.color_hex(0x333333), 0)
+        separator_line.set_style_line_color(lv.color_hex(0x4488FF), 0)  # Blue when idle
         
-        # Message content area
+        # Message content area (starts right under separator)
         label_info = lv.label(scr)
         label_info.set_text("Fetching messages...")
-        label_info.set_pos(10, 56)
+        label_info.set_pos(10, 38)
         label_info.set_width(300)
         label_info.set_style_text_color(lv.color_hex(0xE0E0E0), lv.PART.MAIN)  # Light gray
         label_info.set_long_mode(lv.label.LONG.WRAP)
         label_info.set_style_text_line_space(3, lv.PART.MAIN)  # Better line spacing
 
-        # No priority dot; the separator line will be colored by priority
-        
         lv.scr_load(scr)
         
         # Attach event handler and set up focus group
@@ -250,7 +229,7 @@ async def on_start(app_mgr=None):
 
 async def on_running_foreground():
     """Called every ~200ms - fetch messages here, not on startup"""
-    global last_fetch_time, label_status, messages, current_index, label_title, new_badge, new_badge_time
+    global last_fetch_time, messages, current_index, label_title, new_badge, new_badge_time
     
     now = utime.time()
     if now - last_fetch_time < fetch_interval:
@@ -267,7 +246,7 @@ async def on_running_foreground():
     print(f"Fetching messages at {now}...")
     
     try:
-        # Fetch last 5 messages from past 24h without streaming
+        # Fetch last MAX_MESSAGES from past 24h without streaming
         url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since=24h"
         print(f"GET {url}")
         response = requests.get(url, timeout=10)
@@ -278,7 +257,6 @@ async def on_running_foreground():
                 label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)
             except Exception:
                 pass
-            label_status.set_text("")
             print("Got 200, reading...")
             
             try:
@@ -301,7 +279,7 @@ async def on_running_foreground():
                                 print(f"Parse error: {parse_err}")
                                 continue
                         
-                        # Keep last 5 messages (newest first)
+                        # Keep last MAX_MESSAGES messages (newest first)
                         previous_latest_time = messages[0].get('time', 0) if messages else 0
                         messages = new_messages[-MAX_MESSAGES:]
                         messages.reverse()  # Newest first
@@ -334,30 +312,28 @@ async def on_running_foreground():
                     
             except Exception as read_err:
                 print(f"Read error: {read_err}")
-                label_status.set_text("ERR")
-                label_status.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)  # Red
-                label_info.set_text(f"Error: {str(read_err)[:30]}")
+                try:
+                    label_title.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
+                except Exception:
+                    pass
+                label_info.set_text(f"Error: {str(read_err)[:40]}")
         else:
             print(f"HTTP {response.status_code}")
-            label_status.set_text(f"{response.status_code}")
-            label_status.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
             try:
                 label_title.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
             except Exception:
                 pass
-            label_info.set_text("Server error")
+            label_info.set_text(f"Server error: {response.status_code}")
         
         response.close()
         
     except Exception as e:
         print(f"Fetch failed: {e}")
-        label_status.set_text("FAIL")
-        label_status.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
         try:
             label_title.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
         except Exception:
             pass
-        label_info.set_text(str(e)[:40])
+        label_info.set_text(f"Error: {str(e)[:40]}")
 
 async def on_stop():
     """Called when leaving app"""
