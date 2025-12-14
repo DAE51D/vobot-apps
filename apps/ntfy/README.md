@@ -158,11 +158,11 @@ Optional headers:
 
 ## Technical Details
 
-- **Version:** 0.0.3
+- **Version:** 0.0.4
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x
 - **Dependencies:** urequests, ujson, utime
-- **Fetch interval:** 30 seconds
+- **Fetch interval:** Configurable (default 10 seconds)
 - **Message cache:** Last `MAX_MESSAGES` messages (default 5, 24-hour window)
 
 ## Resources
@@ -173,8 +173,8 @@ Optional headers:
 
 ---
 
-**Version:** 0.0.3  
-**Last Updated:** December 13, 2025
+- **Version:** 0.0.4  
+- **Last Updated:** December 14, 2025
 
 ## Future Enhancements
 
@@ -184,3 +184,4 @@ Optional headers:
 	- WebSocket (`/{topic}/ws`) is efficient but may be heavier for ESP32 MicroPython (TLS, memory). Evaluate feasibility.
 - Settings: Add a `subscription_mode` toggle in web setup to choose between fixed-interval polling and long-poll.
 - Configurable `fetch_interval` in web setup (added), with bounds 5–120 seconds.
+- https://www.perplexity.ai/search/does-self-hosted-lxc-https-doc-vzHfNXoWRu6gLBMyT070ew#0
