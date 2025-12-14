@@ -157,7 +157,7 @@ def update_display():
     except Exception:
         pass
 
-async def on_start():
+async def on_start(app_mgr=None):
     """Called when app starts - just set up UI"""
     global scr, label_title, label_status, label_info, label_counter, separator_line
     print("=== ntfy on_start() ===")
@@ -167,9 +167,28 @@ async def on_start():
         scr.set_style_bg_color(lv.color_hex(0x000000), lv.PART.MAIN)
         scr.set_style_bg_opa(lv.OPA.COVER, lv.PART.MAIN)
         
+        # Optionally load persisted settings from web setup
+        try:
+            if app_mgr:
+                cfg = app_mgr.config() if hasattr(app_mgr, "config") else {}
+                if isinstance(cfg, dict):
+                    # max_messages
+                    mm = cfg.get("max_messages")
+                    if isinstance(mm, int) and 1 <= mm <= 50:
+                        global MAX_MESSAGES
+                        MAX_MESSAGES = mm
+                    # fetch_interval
+                    fi = cfg.get("fetch_interval")
+                    if isinstance(fi, int) and 5 <= fi <= 120:
+                        global fetch_interval
+                        fetch_interval = fi
+        except Exception as _:
+            pass
+
         # Title bar with larger font
         label_title = lv.label(scr)
-        label_title.set_text(f"ntfy:{NTFY_TOPIC}")
+        # Display full server/topic URL for clarity on data source
+        label_title.set_text(f"{NTFY_SERVER}/{NTFY_TOPIC}")
         label_title.set_pos(10, 8)
         label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)  # Greenish by default
         # Note: font_montserrat_18 might not be available, using default
@@ -360,6 +379,14 @@ def get_settings_json():
                 "minimum": 1,
                 "maximum": 50,
                 "default": MAX_MESSAGES,
+            },
+            "fetch_interval": {
+                "type": "integer",
+                "title": "Polling interval (seconds)",
+                "description": "How often to poll the ntfy server",
+                "minimum": 5,
+                "maximum": 120,
+                "default": fetch_interval,
             }
         }
     }

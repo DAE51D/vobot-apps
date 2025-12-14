@@ -148,3 +148,12 @@ Optional headers:
 
 **Version:** 0.0.3  
 **Last Updated:** December 13, 2025
+
+## Future Enhancements
+
+- Subscription mode (reduce polling):
+	- Switch to ntfy long-poll JSON (`/{topic}/json?since=<ts>&poll=1`) to keep the connection open and return immediately on new messages, then re-issue the request. This lowers latency and overhead compared to fixed-interval polling.
+	- Consider SSE (`/{topic}/sse`) if MicroPython streaming is stable; requires incremental parsing of server-sent events and robust reconnection.
+	- WebSocket (`/{topic}/ws`) is efficient but may be heavier for ESP32 MicroPython (TLS, memory). Evaluate feasibility.
+- Settings: Add a `subscription_mode` toggle in web setup to choose between fixed-interval polling and long-poll.
+- Configurable `fetch_interval` in web setup (added), with bounds 5–120 seconds.
