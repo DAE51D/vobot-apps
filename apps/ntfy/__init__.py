@@ -7,7 +7,7 @@ import urequests as requests
 import ujson
 import utime
 
-VERSION = "0.01"
+VERSION = "0.0.2"
 NAME = "ntfy"
 ICON = "A:apps/ntfy/resources/icon.png"
 
@@ -28,21 +28,37 @@ current_index = 0
 def event_handler(e):
     """Handle encoder rotation for message navigation"""
     global current_index, messages
-    e_key = e.get_key()
     
-    if not messages:
-        return
-    
-    if e_key == lv.KEY.RIGHT:  # Rotate counter-clockwise (up/newer)
-        if current_index > 0:
-            current_index -= 1
-            update_display()
-            print(f"← Message {current_index + 1}/{len(messages)}")
-    elif e_key == lv.KEY.LEFT:  # Rotate clockwise (down/older)
-        if current_index < len(messages) - 1:
-            current_index += 1
-            update_display()
-            print(f"→ Message {current_index + 1}/{len(messages)}")
+    e_code = e.get_code()
+    if e_code == lv.EVENT.KEY:
+        e_key = e.get_key()
+        print(f"Key: {e_key}")
+        
+        if not messages:
+            return
+        
+        if e_key == lv.KEY.RIGHT:  # Right = newer
+            if current_index > 0:
+                current_index -= 1
+                update_display()
+                print(f"← Message {current_index + 1}/{len(messages)}")
+        elif e_key == lv.KEY.LEFT:  # Left = older
+            if current_index < len(messages) - 1:
+                current_index += 1
+                update_display()
+                print(f"→ Message {current_index + 1}/{len(messages)}")
+    elif e_code == lv.EVENT.FOCUSED:
+        # Enable edit mode when focused
+        if not lv.group_get_default().get_editing():
+            lv.group_get_default().set_editing(True)
+
+def format_time(timestamp):
+    """Format Unix timestamp to readable time"""
+    try:
+        t = utime.localtime(timestamp)
+        return f"{t[1]:02d}/{t[2]:02d} {t[3]:02d}:{t[4]:02d}"
+    except:
+        return "--/-- --:--"
 
 def update_display():
     """Update UI with current message"""
@@ -54,9 +70,16 @@ def update_display():
         return
     
     msg = messages[current_index]
-    display = msg.get('message') or msg.get('title') or "(no message)"
-    if len(display) > 100:
-        display = display[:97] + "..."
+    
+    # Format time
+    time_str = format_time(msg.get('time', 0))
+    
+    # Build display with number and time
+    msg_text = msg.get('message') or msg.get('title') or "(no message)"
+    display = f"#{current_index + 1} [{time_str}]\n{msg_text}"
+    
+    if len(display) > 150:
+        display = display[:147] + "..."
     
     label_info.set_text(display)
     label_counter.set_text(f"{current_index + 1}/{len(messages)}")
@@ -87,10 +110,15 @@ async def on_start():
         label_info.set_width(310)
         label_info.set_long_mode(lv.label.LONG.WRAP)
         
-        # Attach event handler for encoder rotation
-        scr.add_event(event_handler, lv.EVENT.KEY, None)
-        
         lv.scr_load(scr)
+        
+        # Attach event handler and set up focus group
+        scr.add_event(event_handler, lv.EVENT.ALL, None)
+        group = lv.group_get_default()
+        if group:
+            group.add_obj(scr)
+            lv.group_focus_obj(scr)
+            group.set_editing(True)
         print("UI ready")
         
     except Exception as e:
@@ -108,8 +136,8 @@ async def on_running_foreground():
     print(f"Fetching messages at {now}...")
     
     try:
-        # Fetch last 5 messages without streaming
-        url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since=10m"
+        # Fetch last 5 messages from past 24h without streaming
+        url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since=24h"
         print(f"GET {url}")
         response = requests.get(url, timeout=10)
         print(f"Status: {response.status_code}")

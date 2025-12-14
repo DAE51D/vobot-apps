@@ -99,19 +99,43 @@ Vobot Mini Dock has a rotary encoder (scroll wheel) and buttons. LVGL generates 
 ### Event Handler Example
 ```python
 def event_handler(e):
-    e_key = e.get_key()
-    if e_key == lv.KEY.RIGHT:
-        print("up")
-    elif e_key == lv.KEY.LEFT:
-        print("down")
-    elif e_key == lv.KEY.ENTER:
-        print("enter")
-    elif e_key == lv.KEY.ESC:
-        print("esc")
+    e_code = e.get_code()
+    
+    # Only process KEY events
+    if e_code == lv.EVENT.KEY:
+        e_key = e.get_key()
+        if e_key == lv.KEY.RIGHT:
+            print("up")
+        elif e_key == lv.KEY.LEFT:
+            print("down")
+        elif e_key == lv.KEY.ENTER:
+            print("enter")
+        elif e_key == lv.KEY.ESC:
+            print("esc")
+    
+    # Handle focus events
+    elif e_code == lv.EVENT.FOCUSED:
+        # Enable edit mode when focused
+        if not lv.group_get_default().get_editing():
+            lv.group_get_default().set_editing(True)
 
-# Attach to screen object
+# Attach to screen object and set up focus group
 scr.add_event(event_handler, lv.EVENT.ALL, None)
+
+# CRITICAL: Add screen to focus group for encoder events to work
+group = lv.group_get_default()
+if group:
+    group.add_obj(scr)
+    lv.group_focus_obj(scr)
+    group.set_editing(True)
 ```
+
+**IMPORTANT:** The rotary encoder will not work unless:
+1. Event handler is attached with `lv.EVENT.ALL` (not just `lv.EVENT.KEY`)
+2. Screen is added to the default LVGL group
+3. Screen is focused and editing mode is enabled
+
+See official examples: [photo_album](https://github.com/myvobot/dock-mini-apps/tree/main/photo_album), [countdown](https://github.com/myvobot/dock-mini-apps/tree/main/countdown)
 
 ## LVGL UI Framework
 
@@ -330,6 +354,6 @@ async def on_start():
 
 # Github
 
-There is my personal https://github.com/DAE51D/vobot-apps 
+The repo for all of these apps: https://github.com/DAE51D/vobot-apps 
 
 you have `gh` CLI command available too.
