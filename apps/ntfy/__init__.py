@@ -7,13 +7,15 @@ import urequests as requests
 import ujson
 import utime
 
-VERSION = "0.0.4"
+VERSION = "0.0.5"
+__version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
 ICON = "A:apps/ntfy/resources/icon.png"
 
 NTFY_SERVER = "http://ntfy.home.lan"
 NTFY_TOPIC = "general"
 MAX_MESSAGES = 5
+CONNECTION_MODE = "polling"  # polling | long-poll | sse
 
 scr = None
 label_title = None
@@ -26,6 +28,9 @@ current_index = 0
 separator_line = None
 new_badge_time = 0
 NEW_BADGE_TIMEOUT = 5  # seconds
+sse_response = None
+sse_buffer = ""
+last_time_seen = 0
 
 def event_handler(e):
     """Handle encoder rotation for message navigation"""
@@ -176,6 +181,11 @@ async def on_start(app_mgr=None):
                     if isinstance(fi, int) and 5 <= fi <= 120:
                         global fetch_interval
                         fetch_interval = fi
+                    # connection_mode
+                    cm = cfg.get("connection_mode")
+                    if isinstance(cm, str) and cm in ("polling","long-poll","sse"):
+                        global CONNECTION_MODE
+                        CONNECTION_MODE = cm
         except Exception as _:
             pass
 
@@ -229,9 +239,67 @@ async def on_start(app_mgr=None):
 
 async def on_running_foreground():
     """Called every ~200ms - fetch messages here, not on startup"""
-    global last_fetch_time, messages, current_index, label_title, new_badge, new_badge_time
+    global last_fetch_time, messages, current_index, label_title, new_badge, new_badge_time, sse_response, sse_buffer, last_time_seen
     
     now = utime.time()
+    # SSE mode: keep connection open and parse incoming events
+    if CONNECTION_MODE == "sse":
+        try:
+            if sse_response is None:
+                url = f"{NTFY_SERVER}/{NTFY_TOPIC}/sse?since={last_time_seen or '24h'}"
+                print(f"SSE connect {url}")
+                sse_response = requests.get(url, timeout=10)
+            # Read small chunks and parse lines
+            chunk = None
+            try:
+                chunk = sse_response.raw.read(128)
+            except Exception as _:
+                pass
+            if chunk:
+                try:
+                    sse_buffer += chunk.decode('utf-8')
+                except Exception:
+                    pass
+                lines = sse_buffer.split('\n')
+                sse_buffer = lines[-1] if sse_buffer and not sse_buffer.endswith('\n') else ""
+                for ln in lines[:-1]:
+                    ln = ln.strip()
+                    if ln.startswith('data:'):
+                        data_str = ln[5:].strip()
+                        try:
+                            msg = ujson.loads(data_str)
+                            # Update last_time_seen
+                            last_time_seen = msg.get('time', last_time_seen) or last_time_seen
+                            # Insert at front
+                            messages.insert(0, msg)
+                            messages = messages[:MAX_MESSAGES]
+                            current_index = 0
+                            try:
+                                new_badge.clear_flag(lv.obj.FLAG.HIDDEN)
+                                new_badge_time = now
+                            except Exception:
+                                pass
+                            update_display()
+                        except Exception as parse_err:
+                            print(f"SSE parse error: {parse_err}")
+            # Handle NEW badge timeout
+            try:
+                if new_badge_time and (now - new_badge_time) >= NEW_BADGE_TIMEOUT:
+                    new_badge.add_flag(lv.obj.FLAG.HIDDEN)
+                    new_badge_time = 0
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"SSE error: {e}")
+            try:
+                if sse_response:
+                    sse_response.close()
+            except Exception:
+                pass
+            sse_response = None
+        return
+
+    # Throttled polling/long-poll timing
     if now - last_fetch_time < fetch_interval:
         # Also handle NEW badge timeout
         try:
@@ -246,8 +314,11 @@ async def on_running_foreground():
     print(f"Fetching messages at {now}...")
     
     try:
-        # Fetch last MAX_MESSAGES from past 24h without streaming
-        url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since=24h"
+        # Polling vs Long-poll
+        if CONNECTION_MODE == "long-poll":
+            url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since={last_time_seen or '24h'}"
+        else:
+            url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since=24h"
         print(f"GET {url}")
         response = requests.get(url, timeout=10)
         print(f"Status: {response.status_code}")
@@ -283,6 +354,8 @@ async def on_running_foreground():
                         previous_latest_time = messages[0].get('time', 0) if messages else 0
                         messages = new_messages[-MAX_MESSAGES:]
                         messages.reverse()  # Newest first
+                        if messages:
+                            last_time_seen = messages[0].get('time', last_time_seen) or last_time_seen
                         
                         # Detect new message arrival
                         latest_time = messages[0].get('time', 0) if messages else 0
@@ -363,6 +436,13 @@ def get_settings_json():
                 "minimum": 5,
                 "maximum": 120,
                 "default": fetch_interval,
+            },
+            "connection_mode": {
+                "type": "string",
+                "title": "Connection mode",
+                "description": "Choose message delivery: polling, long-poll or SSE",
+                "enum": ["polling", "long-poll", "sse"],
+                "default": CONNECTION_MODE,
             }
         }
     }

@@ -170,6 +170,7 @@ Optional headers:
 - [ntfy Documentation](https://docs.ntfy.sh/)
 - [Vobot Developer Docs](https://dock.myvobot.com/developer/)
 - [Official Vobot Apps](https://github.com/myvobot/dock-mini-apps)
+- [My Vobot Community Forum Announcement](https://discuss.myvobot.com/t/nfty-app-polls-a-ntfy-server-and-displays-last-n-messages-with-new-ones-surface-to-top-configurable/385)
 
 ---
 
