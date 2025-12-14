@@ -8,12 +8,14 @@ Displays push notifications from an ntfy server on your Vobot Mini Dock. Navigat
 
 ## Features
 
-- 📬 Real-time notification display
-- 🎡 Navigate messages with rotary encoder
-- 🔢 Message counter (e.g., "2/5")
-- 📅 Timestamped messages (MM/DD HH:MM)
-- 🔄 Automatic fetching (every 30 seconds)
-- 💾 Caches last 5 messages
+- Real-time notification display
+- Navigate messages with rotary encoder
+- Message counter integrated into header (e.g., "Message #2/5")
+- Timestamped messages (MM/DD h:MM AM/PM)
+- Automatic fetching (every 30 seconds)
+- Configurable cache size (default last 5 messages)
+- Priority indicator with colored dot and label (Min/Low/Normal/High/Critical)
+- "NEW" badge appears on new message, auto-hides after 5s or on navigation
 
 ## Requirements
 
@@ -36,7 +38,7 @@ NTFY_SERVER = "http://your-ntfy-server"
 NTFY_TOPIC = "your-topic"
 ```
 
-**Future:** Web-based settings UI coming soon!
+**Web Setup:** Configure `max_messages` via the device web UI (Settings → Apps → ntfy). Default is `5` and can be set between `1–50`.
 
 To return to normal operation:
 
@@ -61,18 +63,20 @@ To return to normal operation:
 
 ### Display
 
-- **Line 1:** Topic name (`ntfy: general`)
-- **Line 2:** Status (OK/ERR) and counter (`2/5`)
-- **Line 3+:** Message number, timestamp, and content
+Header (below the horizontal separator):
 
-Example:
 ```
-ntfy: general
-OK                    2/5
+— line color reflects priority (green=Normal, orange=High, red=Critical, blue=Low, gray=Min)
+Normal
+Message #1/5
+12/13 7:19 PM
 
-#2 [12/13 14:35]
-Server backup completed
+Title (optional)
+The message body goes here...
 ```
+
+- Title at top-left: `ntfy:general` (green on success, red if error connecting)
+- "NEW" badge at top-right when a new message arrives (auto-hides after ~5 seconds or when you scroll)
 
 ## Testing
 
@@ -84,7 +88,30 @@ curl -d "Hello Vobot!" http://ntfy.home.lan/general
 
 # With title
 curl -H "Title: Alert" -d "Disk space low" http://ntfy.home.lan/general
+
+# Priority examples (1=min, 2=low, 3=normal, 4=high, 5=critical)
+# Aliases: min, low, default|normal, high, urgent|critical
+
+# Critical (red dot)
+curl -H "Priority: 5" -H "Title: Uptime-Kuma" -d "CRITICAL: Service down" http://ntfy.home.lan/general
+
+# High (orange dot)
+curl -H "Priority: high" -H "Title: Uptime-Kuma" -d "High: Degraded performance" http://ntfy.home.lan/general
+
+# Normal (green dot)
+curl -H "Priority: default" -H "Title: Info" -d "Normal: All good" http://ntfy.home.lan/general
+
+# Low (blue dot)
+curl -H "Priority: low" -H "Title: FYI" -d "Low: heads-up only" http://ntfy.home.lan/general
+
+# Min (gray dot)
+curl -H "Priority: min" -H "Title: Debug" -d "Minimal detail" http://ntfy.home.lan/general
 ```
+
+Optional headers:
+
+- Tags: `-H "Tags: green-circle,rocket"`
+- Click URL: `-H "Click: https://uptime.home.lan"`
 
 ## Troubleshooting
 
@@ -100,15 +127,16 @@ curl -H "Title: Alert" -d "Disk space low" http://ntfy.home.lan/general
 ### App crashes
 - Check memory usage (reduce message cache if needed)
 - Review device logs for errors
+- If emoji show as squares, that’s expected (device font lacks emoji). The app uses colored indicators instead.
 
 ## Technical Details
 
-- **Version:** 0.0.2
+- **Version:** 0.0.3
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x
 - **Dependencies:** urequests, ujson, utime
 - **Fetch interval:** 30 seconds
-- **Message cache:** Last 5 messages (24 hours)
+- **Message cache:** Last `MAX_MESSAGES` messages (default 5, 24-hour window)
 
 ## Resources
 
@@ -118,5 +146,5 @@ curl -H "Title: Alert" -d "Disk space low" http://ntfy.home.lan/general
 
 ---
 
-**Version:** 0.0.2  
+**Version:** 0.0.3  
 **Last Updated:** December 13, 2025
