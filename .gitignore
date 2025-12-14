@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# VS Code
+.vscode/
+
+# Thonny
+.thonny/
+
+# Bytecode / build
+build/
+dist/
+*.egg-info/
+
+# Device upload artifacts
+apps/**/*.mpy
+
+# OS files
+Thumbs.db
+.DS_Store
