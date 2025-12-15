@@ -516,7 +516,7 @@ https://dock.myvobot.com/developer/guides/publishing-guide/manifest_file/
 - Verify the `/apps` page shows the updated version after upload.
 
 ### Best Practices
-- Use sensible defaults for all settings
+- Use sensible defaults for all settings (e.g., default topic `general`; ntfy requires at least one topic, use comma-separated list for multiple)
 - Validate config values with type checks and range checks
 - Provide fallback to defaults if config is unavailable or invalid
 - Keep setting IDs simple and consistent (lowercase, underscores)

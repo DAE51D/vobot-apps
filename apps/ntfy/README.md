@@ -59,10 +59,10 @@ See the main [repository README](../../README.md) for general setup and installa
 Configure via the web interface at http://192.168.1.32/apps/ntfy:
 
 - **Server URL:** Your ntfy server (e.g., `http://ntfy.home.lan`)
-- **Topic:** Topic to subscribe to (e.g., `general`)
+- **Topic(s):** Comma-separated topics (e.g., `general` or `alerts,builds`). ntfy requires at least one topic; wildcards/all-topics are not supported.
 - **Fetch Interval:** Polling frequency in seconds (2-120, default 10)
 - **Max Cached Messages:** Number of messages to store (1-20, default 5)
-- **Connection Mode:** Polling, Long-poll, or SSE (see Connection Modes below)
+- **Connection Mode:** Polling or Long-poll (SSE removed)
 
 To return to normal operation:
 
@@ -179,7 +179,7 @@ Optional headers:
 
 ---
 
-- **Version:** 0.0.6  
+- **Version:** 0.0.8  
 - **Last Updated:** December 14, 2025
 
 ## Connection Modes

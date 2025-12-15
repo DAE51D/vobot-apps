@@ -1,6 +1,6 @@
 application:
   name: ntfy
-  version: 0.0.7
+  version: 0.0.8
   description: Display notifications from ntfy server on Vobot Mini Dock
   author: Daevid Vincent
   author_email: daevid@daevid.com

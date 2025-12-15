@@ -8,7 +8,7 @@ import ujson
 import utime
 import clocktime
 
-VERSION = "0.0.7"
+VERSION = "0.0.8"
 __version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
 ICON = "A:apps/ntfy/resources/icon.png"
@@ -17,7 +17,7 @@ ICON = "A:apps/ntfy/resources/icon.png"
 SECONDS_FROM_1970_TO_2000 = 946684800
 
 NTFY_SERVER = "http://ntfy.home.lan"
-NTFY_TOPIC = ""  # Blank means subscribe to all topics
+NTFY_TOPIC = "general"  # Comma-separated topics (ntfy requires at least one)
 MAX_MESSAGES = 5
 CONNECTION_MODE = "long-poll"  # polling | long-poll
 fetch_interval = 10
@@ -26,6 +26,7 @@ app_mgr = None  # Application manager (set in on_boot)
 scr = None
 label_title = None
 label_info = None
+base_server = None
 
 last_fetch_time = -999  # Force first fetch immediately
 messages = []
@@ -134,10 +135,27 @@ def update_display():
     
     # Get message content
     title = msg.get('title', '')
-    # If no title, fall back to topic name (useful when subscribing to all topics)
+    # If no title, fall back to topic name (useful when subscribing to multiple topics)
     if not title:
         title = msg.get('topic', '')
     body = msg.get('message', '')
+
+    # Update title bar to show current message topic when multiple topics are configured
+    try:
+        mode_prefix = "[P]" if CONNECTION_MODE == "polling" else ("[L]" if CONNECTION_MODE == "long-poll" else "[S]")
+    except Exception:
+        mode_prefix = "[P]"
+    try:
+        if base_server:
+            current_topic = msg.get('topic', '') or NTFY_TOPIC
+            # If multi-topic config, prefer the message's topic for display
+            if "," in NTFY_TOPIC and current_topic:
+                title_path = f"{base_server}/{current_topic}"
+            else:
+                title_path = f"{base_server}/{NTFY_TOPIC}"
+            label_title.set_text(f"{mode_prefix} {title_path}")
+    except Exception:
+        pass
     
     # Build display: header, optional title (bold if present), body
     if title and body:
@@ -174,7 +192,7 @@ async def on_boot(apm):
 
 async def on_start():
     """Called when app starts - set up UI and load config"""
-    global scr, label_title, label_info, separator_line
+    global scr, label_title, label_info, separator_line, base_server
     global NTFY_SERVER, NTFY_TOPIC, MAX_MESSAGES, fetch_interval, CONNECTION_MODE
     
     print("=== ntfy on_start() ===")
@@ -200,9 +218,18 @@ async def on_start():
                     # topic
                     top = cfg.get("topic")
                     if isinstance(top, str):
-                        # Allow blank topic to subscribe to all topics
-                        NTFY_TOPIC = top.strip()
-                        print(f"Topic set to: {NTFY_TOPIC or '[all topics]'}")
+                        topics_raw = top.strip()
+                        if topics_raw:
+                            topics_list = [t.strip() for t in topics_raw.split(',') if t.strip()]
+                            if topics_list:
+                                NTFY_TOPIC = ','.join(topics_list)
+                                print(f"Topic(s) set to: {NTFY_TOPIC}")
+                            else:
+                                NTFY_TOPIC = "general"
+                                print("Topic empty after parsing; defaulting to 'general'")
+                        else:
+                            NTFY_TOPIC = "general"
+                            print("Topic blank; defaulting to 'general'")
                     # max_messages (comes as string from input field)
                     mm = cfg.get("max_messages")
                     if mm:
@@ -235,16 +262,18 @@ async def on_start():
 
         # Title bar with larger font
         label_title = lv.label(scr)
-        # Display full server/topic URL for clarity on data source with mode prefix
+        # Display server/topic with mode prefix; multi-topic uses first topic for initial display
         try:
             mode_prefix = "[P]" if CONNECTION_MODE == "polling" else ("[L]" if CONNECTION_MODE == "long-poll" else "[S]")
         except Exception:
             mode_prefix = "[P]"
         base_server = NTFY_SERVER.rstrip("/") or NTFY_SERVER
-        if NTFY_TOPIC:
-            title_path = f"{base_server}/{NTFY_TOPIC}"
-        else:
-            title_path = base_server
+        initial_topic = NTFY_TOPIC
+        if "," in NTFY_TOPIC:
+            parts = [p.strip() for p in NTFY_TOPIC.split(',') if p.strip()]
+            if parts:
+                initial_topic = parts[0]
+        title_path = f"{base_server}/{initial_topic}"
         label_title.set_text(f"{mode_prefix} {title_path}")
         label_title.set_pos(10, 8)
         label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)  # Greenish by default
@@ -313,10 +342,7 @@ async def on_running_foreground():
     try:
         # Polling vs Long-poll
         base_server = NTFY_SERVER.rstrip("/") or NTFY_SERVER
-        if NTFY_TOPIC:
-            path = f"{base_server}/{NTFY_TOPIC}/json"
-        else:
-            path = f"{base_server}/json"
+        path = f"{base_server}/{NTFY_TOPIC}/json"
 
         if CONNECTION_MODE == "long-poll":
             url = f"{path}?poll=1&since={last_time_seen or '24h'}"
@@ -458,11 +484,11 @@ def get_settings_json():
             },
             {
                 "type": "input",
-                "default": "",
-                "caption": "ntfy Topic",
+                "default": "general",
+                "caption": "ntfy Topic(s)",
                 "name": "topic",
-                "attributes": {"maxLength": 50, "placeholder": "(blank = all topics)"},
-                "tip": "Leave blank to subscribe to all topics"
+                "attributes": {"maxLength": 100, "placeholder": "e.g., general or alerts,builds"},
+                "tip": "Comma-separated topics (ntfy requires at least one)"
             },
             {
                 "type": "input",
