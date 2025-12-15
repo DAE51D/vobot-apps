@@ -6,8 +6,11 @@ A collection of custom applications for the Vobot Mini Dock smart display.
 
 ```
 vobot-apps/
-├── apps/
-│   └── ntfy/           # ntfy notification viewer app
+├── ntfy/                    # ntfy project folder
+│   ├── apps/
+│   │   └── ntfy/           # app package for device
+│   └── *.jpg               # screenshots
+├── .venv/                   # workspace-level Python venv
 ├── .github/
 │   ├── copilot-instructions.md
 │   └── prompts/
@@ -29,7 +32,7 @@ A notification viewer for self-hosted ntfy servers. Displays push notifications 
 
 **Status:** 🚧 In Development (v0.0.2)
 
-See [apps/ntfy/README.md](apps/ntfy/README.md) for details.
+See [ntfy/apps/ntfy/README.md](ntfy/apps/ntfy/README.md) for details.
 
 ## Vobot Mini Dock Platform
 
@@ -147,9 +150,15 @@ This is a personal project repository. Feel free to fork and adapt for your own 
 
 [My Vobot Community Forum Announcement](https://discuss.myvobot.com/t/nfty-app-polls-a-ntfy-server-and-displays-last-n-messages-with-new-ones-surface-to-top-configurable/385)
 
-## License
+## Git 
 
-MIT License - See individual app folders for specific licensing.
+This is for my own note to append to the last commit. Useful for minor changes I don't want to clutter up my history with...
+```
+git add -u
+git commit --amend --no-edit
+git push origin master:main --force
+git status
+```
 
 ---
 

@@ -1,6 +1,6 @@
 # Infrastructure
 
-You are running in #vscode on a Windows 11 machine. The current working directory is `D:\daevid\Code\Vobot\nfty`
+You are running in #vscode on a Windows 11 machine. The current working directory is `D:\daevid\Code\Vobot`
 
 # Role
 
@@ -336,8 +336,8 @@ while($port.IsOpen) {
 ### Upload + Monitor Workflow
 ```powershell
 # Terminal 1: Upload app (closes after upload completes)
-cd D:\daevid\Code\Vobot\nfty
-.venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay 1 put ntfy /apps/ntfy
+cd D:\daevid\Code\Vobot\ntfy
+../.venv/Scripts/ampy.exe --port COM4 --baud 115200 --delay 1 put apps/ntfy /apps/ntfy
 
 # Terminal 2: Monitor logs in real-time (keep running)
 $port = New-Object System.IO.Ports.SerialPort COM4, 115200, None, 8, One
