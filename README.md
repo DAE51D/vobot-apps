@@ -45,9 +45,10 @@ See [apps/ntfy/README.md](apps/ntfy/README.md) for details.
 - Vobot Mini Dock device
 - USB-C data cable (not charge-only)
 - Computer (Windows/Linux/macOS)
+- Connect via the USB-C on the right side of the device (literally named "computer")
 
 #### Software
-- [Thonny IDE](https://thonny.org/) (recommended) or VS Code with Pymakr
+- [Thonny IDE](https://thonny.org/) (recommended) or VS Code with [ampy](https://github.com/scientifichackers/ampy)
 - [ampy](https://github.com/scientifichackers/ampy) for command-line uploads
 - Python 3.7+ for development tools
 
@@ -136,10 +137,15 @@ while($port.IsOpen) {
 - [LVGL Documentation](https://docs.lvgl.io/)
 - [MicroPython Documentation](https://docs.micropython.org/)
 - [Official Vobot Apps Repository](https://github.com/myvobot/dock-mini-apps)
+- [User Forum](https://discuss.myvobot.com/)
+- [Vobot Mini Dock Simulator](https://dock.myvobot.com/developer/mini_dock_emulator/)
+- [Vobot Publishing Guide](https://dock.myvobot.com/developer/guides/publishing-guide/)
 
 ## Contributing
 
-This is a personal project repository. Feel free to fork and adapt for your own use.
+This is a personal project repository. Feel free to fork and adapt for your own use or even make a PR if you want to contribute back to this and make it better.
+
+[My Vobot Community Forum Announcement](https://discuss.myvobot.com/t/nfty-app-polls-a-ntfy-server-and-displays-last-n-messages-with-new-ones-surface-to-top-configurable/385)
 
 ## License
 

@@ -6,30 +6,33 @@ import lvgl as lv
 import urequests as requests
 import ujson
 import utime
+import clocktime
 
-VERSION = "0.0.5"
+VERSION = "0.0.7"
 __version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
 ICON = "A:apps/ntfy/resources/icon.png"
 
-NTFY_SERVER = "http://ntfy.home.lan"
-NTFY_TOPIC = "general"
-MAX_MESSAGES = 5
-CONNECTION_MODE = "polling"  # polling | long-poll | sse
+# MicroPython uses 2000-01-01 epoch, Unix uses 1970-01-01
+SECONDS_FROM_1970_TO_2000 = 946684800
 
+NTFY_SERVER = "http://ntfy.home.lan"
+NTFY_TOPIC = ""  # Blank means subscribe to all topics
+MAX_MESSAGES = 5
+CONNECTION_MODE = "long-poll"  # polling | long-poll
+fetch_interval = 10
+
+app_mgr = None  # Application manager (set in on_boot)
 scr = None
 label_title = None
 label_info = None
 
 last_fetch_time = -999  # Force first fetch immediately
-fetch_interval = 10
 messages = []
 current_index = 0
 separator_line = None
 new_badge_time = 0
 NEW_BADGE_TIMEOUT = 5  # seconds
-sse_response = None
-sse_buffer = ""
 last_time_seen = 0
 
 def event_handler(e):
@@ -72,7 +75,11 @@ def event_handler(e):
 def format_time(timestamp):
     """Format Unix timestamp to 12-hour time with am/pm"""
     try:
-        t = utime.localtime(timestamp)
+        # Apply timezone offset to the Unix timestamp
+        tz_offset = clocktime.tzoffset()
+        local_timestamp = timestamp + tz_offset
+        # Convert to time tuple using utime.localtime
+        t = utime.localtime(local_timestamp)
         month = t[1]
         day = t[2]
         hour24 = t[3]
@@ -127,6 +134,9 @@ def update_display():
     
     # Get message content
     title = msg.get('title', '')
+    # If no title, fall back to topic name (useful when subscribing to all topics)
+    if not title:
+        title = msg.get('topic', '')
     body = msg.get('message', '')
     
     # Build display: header, optional title (bold if present), body
@@ -156,43 +166,86 @@ def update_display():
     except Exception:
         pass
 
-async def on_start(app_mgr=None):
-    """Called when app starts - just set up UI"""
+async def on_boot(apm):
+    """Called when app is first loaded - store app manager"""
+    global app_mgr
+    app_mgr = apm
+    print(f"=== ntfy on_boot() === app_mgr: {app_mgr}")
+
+async def on_start():
+    """Called when app starts - set up UI and load config"""
     global scr, label_title, label_info, separator_line
+    global NTFY_SERVER, NTFY_TOPIC, MAX_MESSAGES, fetch_interval, CONNECTION_MODE
+    
     print("=== ntfy on_start() ===")
+    print(f"app_mgr: {app_mgr}")
+    print(f"Current CONNECTION_MODE: {CONNECTION_MODE}")
     
     try:
         scr = lv.obj()
         scr.set_style_bg_color(lv.color_hex(0x000000), lv.PART.MAIN)
         scr.set_style_bg_opa(lv.OPA.COVER, lv.PART.MAIN)
         
-        # Optionally load persisted settings from web setup
+        # Load persisted settings from web setup
         try:
             if app_mgr:
                 cfg = app_mgr.config() if hasattr(app_mgr, "config") else {}
+                print(f"Config loaded: {cfg}")
                 if isinstance(cfg, dict):
-                    # max_messages
+                    # server
+                    srv = cfg.get("server")
+                    if isinstance(srv, str) and srv:
+                        NTFY_SERVER = srv
+                        print(f"Server set to: {NTFY_SERVER}")
+                    # topic
+                    top = cfg.get("topic")
+                    if isinstance(top, str):
+                        # Allow blank topic to subscribe to all topics
+                        NTFY_TOPIC = top.strip()
+                        print(f"Topic set to: {NTFY_TOPIC or '[all topics]'}")
+                    # max_messages (comes as string from input field)
                     mm = cfg.get("max_messages")
-                    if isinstance(mm, int) and 1 <= mm <= 50:
-                        global MAX_MESSAGES
-                        MAX_MESSAGES = mm
-                    # fetch_interval
+                    if mm:
+                        try:
+                            mm = int(mm)
+                            if 1 <= mm <= 50:
+                                MAX_MESSAGES = mm
+                                print(f"Max messages set to: {MAX_MESSAGES}")
+                        except (ValueError, TypeError):
+                            pass
+                    # fetch_interval (comes as string from input field)
                     fi = cfg.get("fetch_interval")
-                    if isinstance(fi, int) and 5 <= fi <= 120:
-                        global fetch_interval
-                        fetch_interval = fi
+                    if fi:
+                        try:
+                            fi = int(fi)
+                            if 2 <= fi <= 120:
+                                fetch_interval = fi
+                                print(f"Fetch interval set to: {fetch_interval}")
+                        except (ValueError, TypeError):
+                            pass
                     # connection_mode
                     cm = cfg.get("connection_mode")
                     if isinstance(cm, str) and cm in ("polling","long-poll","sse"):
-                        global CONNECTION_MODE
                         CONNECTION_MODE = cm
-        except Exception as _:
-            pass
+                        print(f"Connection mode set to: {CONNECTION_MODE}")
+            else:
+                print("WARNING: app_mgr is None - config will not load")
+        except Exception as e:
+            print(f"Config load error: {e}")
 
         # Title bar with larger font
         label_title = lv.label(scr)
-        # Display full server/topic URL for clarity on data source
-        label_title.set_text(f"{NTFY_SERVER}/{NTFY_TOPIC}")
+        # Display full server/topic URL for clarity on data source with mode prefix
+        try:
+            mode_prefix = "[P]" if CONNECTION_MODE == "polling" else ("[L]" if CONNECTION_MODE == "long-poll" else "[S]")
+        except Exception:
+            mode_prefix = "[P]"
+        base_server = NTFY_SERVER.rstrip("/") or NTFY_SERVER
+        if NTFY_TOPIC:
+            title_path = f"{base_server}/{NTFY_TOPIC}"
+        else:
+            title_path = base_server
+        label_title.set_text(f"{mode_prefix} {title_path}")
         label_title.set_pos(10, 8)
         label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)  # Greenish by default
 
@@ -239,65 +292,9 @@ async def on_start(app_mgr=None):
 
 async def on_running_foreground():
     """Called every ~200ms - fetch messages here, not on startup"""
-    global last_fetch_time, messages, current_index, label_title, new_badge, new_badge_time, sse_response, sse_buffer, last_time_seen
+    global last_fetch_time, messages, current_index, label_title, new_badge, new_badge_time, last_time_seen
     
     now = utime.time()
-    # SSE mode: keep connection open and parse incoming events
-    if CONNECTION_MODE == "sse":
-        try:
-            if sse_response is None:
-                url = f"{NTFY_SERVER}/{NTFY_TOPIC}/sse?since={last_time_seen or '24h'}"
-                print(f"SSE connect {url}")
-                sse_response = requests.get(url, timeout=10)
-            # Read small chunks and parse lines
-            chunk = None
-            try:
-                chunk = sse_response.raw.read(128)
-            except Exception as _:
-                pass
-            if chunk:
-                try:
-                    sse_buffer += chunk.decode('utf-8')
-                except Exception:
-                    pass
-                lines = sse_buffer.split('\n')
-                sse_buffer = lines[-1] if sse_buffer and not sse_buffer.endswith('\n') else ""
-                for ln in lines[:-1]:
-                    ln = ln.strip()
-                    if ln.startswith('data:'):
-                        data_str = ln[5:].strip()
-                        try:
-                            msg = ujson.loads(data_str)
-                            # Update last_time_seen
-                            last_time_seen = msg.get('time', last_time_seen) or last_time_seen
-                            # Insert at front
-                            messages.insert(0, msg)
-                            messages = messages[:MAX_MESSAGES]
-                            current_index = 0
-                            try:
-                                new_badge.clear_flag(lv.obj.FLAG.HIDDEN)
-                                new_badge_time = now
-                            except Exception:
-                                pass
-                            update_display()
-                        except Exception as parse_err:
-                            print(f"SSE parse error: {parse_err}")
-            # Handle NEW badge timeout
-            try:
-                if new_badge_time and (now - new_badge_time) >= NEW_BADGE_TIMEOUT:
-                    new_badge.add_flag(lv.obj.FLAG.HIDDEN)
-                    new_badge_time = 0
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"SSE error: {e}")
-            try:
-                if sse_response:
-                    sse_response.close()
-            except Exception:
-                pass
-            sse_response = None
-        return
 
     # Throttled polling/long-poll timing
     if now - last_fetch_time < fetch_interval:
@@ -315,10 +312,18 @@ async def on_running_foreground():
     
     try:
         # Polling vs Long-poll
-        if CONNECTION_MODE == "long-poll":
-            url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since={last_time_seen or '24h'}"
+        base_server = NTFY_SERVER.rstrip("/") or NTFY_SERVER
+        if NTFY_TOPIC:
+            path = f"{base_server}/{NTFY_TOPIC}/json"
         else:
-            url = f"{NTFY_SERVER}/{NTFY_TOPIC}/json?poll=1&since=24h"
+            path = f"{base_server}/json"
+
+        if CONNECTION_MODE == "long-poll":
+            url = f"{path}?poll=1&since={last_time_seen or '24h'}"
+            print("Mode: Long-poll (subscription)")
+        else:
+            url = f"{path}?poll=1&since=24h"
+            print("Mode: Polling")
         print(f"GET {url}")
         response = requests.get(url, timeout=10)
         print(f"Status: {response.status_code}")
@@ -350,10 +355,31 @@ async def on_running_foreground():
                                 print(f"Parse error: {parse_err}")
                                 continue
                         
-                        # Keep last MAX_MESSAGES messages (newest first)
+                        # Keep track of old messages before update
                         previous_latest_time = messages[0].get('time', 0) if messages else 0
-                        messages = new_messages[-MAX_MESSAGES:]
-                        messages.reverse()  # Newest first
+                        
+                        # For long-poll: prepend new messages to history, keep cached messages
+                        # For polling: replace entire list with fetched messages
+                        if CONNECTION_MODE == "long-poll":
+                            # Merge: new messages at front + keep old cached messages
+                            # Deduplicate by message ID to avoid showing same message multiple times
+                            new_messages.reverse()  # Newest first
+                            existing_ids = {msg.get('id') for msg in messages if msg.get('id')}
+                            unique_new = []
+                            for msg in new_messages:
+                                msg_id = msg.get('id')
+                                if not msg_id or msg_id not in existing_ids:
+                                    unique_new.append(msg)
+                                    if msg_id:
+                                        existing_ids.add(msg_id)
+                            # Concatenate: newest new messages first, then old messages
+                            messages = unique_new + messages
+                            messages = messages[:MAX_MESSAGES]  # Trim to max
+                        else:
+                            # Polling: take last MAX_MESSAGES from fetch
+                            messages = new_messages[-MAX_MESSAGES:]
+                            messages.reverse()  # Newest first
+                        
                         if messages:
                             last_time_seen = messages[0].get('time', last_time_seen) or last_time_seen
                         
@@ -418,32 +444,50 @@ async def on_stop():
         scr = None
 
 def get_settings_json():
-    # Configuration schema for web setup UI
+    """Return JSON for web settings form - called by Vobot system"""
     return {
-        "schema": {
-            "max_messages": {
-                "type": "integer",
-                "title": "Max messages to cache",
-                "description": "Number of recent messages to display",
-                "minimum": 1,
-                "maximum": 50,
-                "default": MAX_MESSAGES,
+        "title": "ntfy Configuration",
+        "form": [
+            {
+                "type": "input",
+                "default": "http://ntfy.home.lan",
+                "caption": "ntfy Server URL",
+                "name": "server",
+                "attributes": {"maxLength": 100, "placeholder": "http://ntfy.home.lan"},
+                "tip": "Full URL to the ntfy server"
             },
-            "fetch_interval": {
-                "type": "integer",
-                "title": "Polling interval (seconds)",
-                "description": "How often to poll the ntfy server",
-                "minimum": 5,
-                "maximum": 120,
-                "default": fetch_interval,
+            {
+                "type": "input",
+                "default": "",
+                "caption": "ntfy Topic",
+                "name": "topic",
+                "attributes": {"maxLength": 50, "placeholder": "(blank = all topics)"},
+                "tip": "Leave blank to subscribe to all topics"
             },
-            "connection_mode": {
-                "type": "string",
-                "title": "Connection mode",
-                "description": "Choose message delivery: polling, long-poll or SSE",
-                "enum": ["polling", "long-poll", "sse"],
-                "default": CONNECTION_MODE,
+            {
+                "type": "input",
+                "default": "10",
+                "caption": "Fetch Interval (seconds)",
+                "name": "fetch_interval",
+                "attributes": {"maxLength": 3, "placeholder": "10"},
+                "tip": "How often to check for new messages (2-120 seconds)"
+            },
+            {
+                "type": "input",
+                "default": "5",
+                "caption": "Max Cached Messages",
+                "name": "max_messages",
+                "attributes": {"maxLength": 2, "placeholder": "5"},
+                "tip": "Maximum number of messages to cache (1-20)"
+            },
+            {
+                "type": "select",
+                "default": "long-poll",
+                "caption": "Connection Mode",
+                "name": "connection_mode",
+                "options": [("Polling", "polling"), ("Long-poll", "long-poll")],
+                "tip": "Polling checks periodically; Long-poll waits for new messages"
             }
-        }
+        ]
     }
 

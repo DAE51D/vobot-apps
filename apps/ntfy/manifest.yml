@@ -1,11 +1,11 @@
 application:
   name: ntfy
-  version: 0.0.2
+  version: 0.0.7
   description: Display notifications from ntfy server on Vobot Mini Dock
-  author: Daevid
-  author_email: 
-  bugs: 
-  repository: 
+  author: Daevid Vincent
+  author_email: daevid@daevid.com
+  bugs: https://github.com/DAE51D/vobot-apps/issues
+  repository: https://github.com/DAE51D/vobot-apps/tree/main/apps/ntfy
   licenses: MIT
 
 system_requirements:
@@ -17,37 +17,3 @@ files:
   include:
     - __init__.py
     - manifest.yml
-    - settings/__init__.py
-    - resources/icon.png
-
-# Settings configuration for web UI
-settings:
-  - id: ntfy_server
-    label: ntfy Server URL
-    type: string
-    default: http://ntfy.home.lan
-    placeholder: http://ntfy.home.lan
-    description: Full URL to the ntfy server
-
-  - id: ntfy_topic
-    label: ntfy Topic
-    type: string
-    default: general
-    placeholder: general
-    description: Topic name to subscribe to
-
-  - id: fetch_interval
-    label: Fetch Interval (seconds)
-    type: number
-    default: 30
-    min: 5
-    max: 300
-    description: How often to check for new messages
-
-  - id: max_messages
-    label: Max Cached Messages
-    type: number
-    default: 20
-    min: 5
-    max: 100
-    description: Maximum number of messages to cache

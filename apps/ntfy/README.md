@@ -56,16 +56,13 @@ See the main [repository README](../../README.md) for general setup and installa
 
 ### ntfy Server Configuration
 
-This app connects to: `http://ntfy.home.lan/general`
+Configure via the web interface at http://192.168.1.32/apps/ntfy:
 
-To change the server or topic, edit `__init__.py`:
-
-```python
-NTFY_SERVER = "http://your-ntfy-server"
-NTFY_TOPIC = "your-topic"
-```
-
-**Web Setup:** Configure `max_messages` via the device web UI (Settings → Apps → ntfy). Default is `5` and can be set between `1–50`.
+- **Server URL:** Your ntfy server (e.g., `http://ntfy.home.lan`)
+- **Topic:** Topic to subscribe to (e.g., `general`)
+- **Fetch Interval:** Polling frequency in seconds (2-120, default 10)
+- **Max Cached Messages:** Number of messages to store (1-20, default 5)
+- **Connection Mode:** Polling, Long-poll, or SSE (see Connection Modes below)
 
 To return to normal operation:
 
@@ -77,6 +74,14 @@ To return to normal operation:
 
 ## Installation
 
+```powershell
+.venv\Scripts\python.exe -m py_compile apps/ntfy/__init__.py
+
+# push to Vobot
+Start-Sleep -Seconds 1; .venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay 2 put apps/ntfy /apps/ntfy
+# or this
+ Get-Process | Where-Object {$_.Name -eq 'pwsh' -and $_.Id -ne $PID} | Stop-Process -Force; Start-Sleep -Seconds 2; .venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay 2 put apps/ntfy /apps/ntfy
+```
 
 ## Usage
 
@@ -158,11 +163,11 @@ Optional headers:
 
 ## Technical Details
 
-- **Version:** 0.0.4
+- **Version:** 0.0.7
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x
 - **Dependencies:** urequests, ujson, utime
-- **Fetch interval:** Configurable (default 10 seconds)
+- **Default mode:** Long-poll (real-time, stable)
 - **Message cache:** Last `MAX_MESSAGES` messages (default 5, 24-hour window)
 
 ## Resources
@@ -174,15 +179,33 @@ Optional headers:
 
 ---
 
-- **Version:** 0.0.4  
+- **Version:** 0.0.6  
 - **Last Updated:** December 14, 2025
 
-## Future Enhancements
+## Connection Modes
 
-- Subscription mode (reduce polling):
-	- Switch to ntfy long-poll JSON (`/{topic}/json?since=<ts>&poll=1`) to keep the connection open and return immediately on new messages, then re-issue the request. This lowers latency and overhead compared to fixed-interval polling.
-	- Consider SSE (`/{topic}/sse`) if MicroPython streaming is stable; requires incremental parsing of server-sent events and robust reconnection.
-	- WebSocket (`/{topic}/ws`) is efficient but may be heavier for ESP32 MicroPython (TLS, memory). Evaluate feasibility.
-- Settings: Add a `subscription_mode` toggle in web setup to choose between fixed-interval polling and long-poll.
-- Configurable `fetch_interval` in web setup (added), with bounds 5–120 seconds.
-- https://www.perplexity.ai/search/does-self-hosted-lxc-https-doc-vzHfNXoWRu6gLBMyT070ew#0
+The app supports two message delivery methods (configure via web settings):
+
+### Polling
+- Fetches messages every N seconds (configurable, default 10s)
+- Simple and reliable
+- Uses `/json?poll=1&since=24h` endpoint
+- **Use when:** You don't mind slight delays (10+ seconds)
+
+### Long-poll (Default)
+- Keeps HTTP connection open, returns immediately when new message arrives
+- Much lower latency than polling (near real-time)
+- Automatically reconnects after each message
+- Uses `/json?poll=1&since=<last_time_seen>` endpoint
+- **Recommended:** Default mode for better responsiveness with stable WiFi
+
+**Note:** Both modes require stable WiFi. If experiencing frequent disconnects, use Polling mode with a longer interval.
+
+### SSE (Removed)
+SSE (Server-Sent Events) mode was tested but removed due to architectural limitations in MicroPython:
+- Blocking read behavior caused UI responsiveness issues (sluggish encoder)
+- Continuous loop without data resulted in system lag
+- Device's 200ms polling model incompatible with SSE's persistent streaming design
+- Long-poll provides similar latency benefits with better stability
+
+If you need SSE-level responsiveness, long-poll is the recommended alternative.
