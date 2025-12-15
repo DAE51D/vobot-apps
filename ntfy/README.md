@@ -19,24 +19,26 @@ Displays push notifications from an ntfy server on your Vobot Mini Dock. Navigat
 
 ## Screenshots
 
+> Note these screenshots will not always be accurate to the current version. Newer displays look nicer IMHO, but I'm too lazy to take more photos and all that jazz just now. I'm too busy getting this app solid. Then I'll align things later as it's stable UI. But you get the idea of what this does.
+
 <table>
 <tr>
 <td width="50%">
-<img src="../../ntfy_web_page.png" alt="Web configuration page" />
+<img src="./ntfy_web_page.png" alt="Web configuration page" />
 <p align="center"><em>Web Setup Interface</em></p>
 </td>
 <td width="50%">
-<img src="../../ntfy_normal_message.jpg" alt="Normal priority message" />
+<img src="./ntfy_normal_message.jpg" alt="Normal priority message" />
 <p align="center"><em>Normal Priority (Green)</em></p>
 </td>
 </tr>
 <tr>
 <td width="50%">
-<img src="../../ntfy_high_message.jpg" alt="High priority message" />
+<img src="./ntfy_high_message.jpg" alt="High priority message" />
 <p align="center"><em>High Priority (Orange)</em></p>
 </td>
 <td width="50%">
-<img src="../../ntfy_critical_message.jpg" alt="Critical priority message" />
+<img src="./ntfy_critical_message.jpg" alt="Critical priority message" />
 <p align="center"><em>Critical Priority (Red)</em></p>
 </td>
 </tr>
@@ -98,16 +100,15 @@ Start-Sleep -Seconds 1; .venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay
 Header (below the horizontal separator):
 
 ```
+[P|L] http://ntfy.home.lan/topic
 — line color reflects priority (green=Normal, orange=High, red=Critical, blue=Low, gray=Min)
-Normal
-Message #1/5
-12/13 7:19 PM
+[1/5] {priority} - mm/dd h:mm pm
 
-Title (optional)
+Title <if exists>
 The message body goes here...
 ```
-
-- Title at top-left: `ntfy:general` (green on success, red if error connecting)
+- [P|L] indicates Polling or Long-Polling (default)
+- Title (green on success, red if error connecting)
 - "NEW" badge at top-right when a new message arrives (auto-hides after ~5 seconds or when you scroll)
 
 ## Testing
@@ -209,3 +210,9 @@ SSE (Server-Sent Events) mode was tested but removed due to architectural limita
 - Long-poll provides similar latency benefits with better stability
 
 If you need SSE-level responsiveness, long-poll is the recommended alternative.
+
+## License
+
+[baba-yaga](https://github.com/ErikMcClure/bad-licenses/blob/master/baba-yaga)
+
+In other words, YOLO. IDGAF what you do with this. Have fun. Make it better. Make a million dollars off it. Learn something new (as I did). Make the community a better place by contributing to it something for the sad sad "[app store](https://app.myvobot.com/)"

@@ -13,6 +13,7 @@ venv/
 
 # Thonny
 .thonny/
+/thonny
 
 # Bytecode / build
 build/
@@ -25,3 +26,10 @@ apps/**/*.mpy
 # OS files
 Thumbs.db
 .DS_Store
+
+/dock-app-bundler-win.exe
+
+/*.zip
+/*.url
+/.specstory
+/.venv
