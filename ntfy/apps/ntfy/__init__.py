@@ -8,7 +8,7 @@ import ujson
 import utime
 import clocktime
 
-VERSION = "0.0.8"
+VERSION = "1.0.0"
 __version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
 ICON = "A:apps/ntfy/resources/icon.png"
@@ -27,6 +27,7 @@ scr = None
 label_title = None
 label_info = None
 base_server = None
+header_prio_icon = None  # Icon shown next to header line
 
 last_fetch_time = -999  # Force first fetch immediately
 messages = []
@@ -35,6 +36,7 @@ separator_line = None
 new_badge_time = 0
 NEW_BADGE_TIMEOUT = 5  # seconds
 last_time_seen = 0
+new_badge_icon = None  # Priority icon shown on new message
 
 def event_handler(e):
     """Handle encoder rotation for message navigation"""
@@ -55,7 +57,9 @@ def event_handler(e):
                 print(f"← Message {current_index + 1}/{len(messages)}")
                 # Hide NEW badge on user navigation
                 try:
-                    new_badge.add_flag(lv.obj.FLAG.HIDDEN)
+                    # Hide priority icon when user navigates
+                    if new_badge_icon:
+                        new_badge_icon.add_flag(lv.obj.FLAG.HIDDEN)
                 except Exception:
                     pass
         elif e_key == lv.KEY.LEFT:  # Left = older
@@ -65,7 +69,9 @@ def event_handler(e):
                 print(f"→ Message {current_index + 1}/{len(messages)}")
                 # Hide NEW badge on user navigation
                 try:
-                    new_badge.add_flag(lv.obj.FLAG.HIDDEN)
+                    # Hide priority icon when user navigates
+                    if new_badge_icon:
+                        new_badge_icon.add_flag(lv.obj.FLAG.HIDDEN)
                 except Exception:
                     pass
     elif e_code == lv.EVENT.FOCUSED:
@@ -95,11 +101,16 @@ def format_time(timestamp):
 
 def update_display():
     """Update UI with current message"""
-    global messages, current_index, label_info, separator_line
+    global messages, current_index, label_info, separator_line, header_prio_icon
     
     if not messages or current_index >= len(messages):
         label_info.set_text("No messages yet.\n\nWaiting for notifications...")
         label_info.set_style_text_color(lv.color_hex(0x808080), lv.PART.MAIN)  # Dim gray
+        try:
+            if header_prio_icon:
+                header_prio_icon.add_flag(lv.obj.FLAG.HIDDEN)
+        except Exception:
+            pass
         # Separator line blue when idle
         try:
             if separator_line:
@@ -132,6 +143,22 @@ def update_display():
     
     # Condensed single-line header: [1/1] Normal - 12/14 9:25 PM
     header = f"[{current_index + 1}/{len(messages)}] {prio_name} - {time_str}"
+
+    # Update header icon for current priority
+    try:
+        prio_icon_map = {
+            1: "A:apps/ntfy/resources/min.png",
+            2: "A:apps/ntfy/resources/low.png",
+            3: "A:apps/ntfy/resources/default.png",
+            4: "A:apps/ntfy/resources/high.png",
+            5: "A:apps/ntfy/resources/max.png",
+        }
+        icon_src = prio_icon_map.get(prio, "A:apps/ntfy/resources/default.png")
+        if header_prio_icon:
+            header_prio_icon.set_src(icon_src)
+            header_prio_icon.clear_flag(lv.obj.FLAG.HIDDEN)
+    except Exception:
+        pass
     
     # Get message content
     title = msg.get('title', '')
@@ -192,7 +219,7 @@ async def on_boot(apm):
 
 async def on_start():
     """Called when app starts - set up UI and load config"""
-    global scr, label_title, label_info, separator_line, base_server
+    global scr, label_title, label_info, separator_line, base_server, header_prio_icon
     global NTFY_SERVER, NTFY_TOPIC, MAX_MESSAGES, fetch_interval, CONNECTION_MODE
     
     print("=== ntfy on_start() ===")
@@ -278,29 +305,40 @@ async def on_start():
         label_title.set_pos(10, 8)
         label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)  # Greenish by default
 
-        # New message badge (hidden by default)
+        # New message priority icon (hidden by default)
         try:
-            global new_badge
-            new_badge = lv.label(scr)
-            new_badge.set_text("NEW")
-            new_badge.align(lv.ALIGN.TOP_RIGHT, -10, 8)
-            new_badge.set_style_text_color(lv.color_hex(0xFFA500), lv.PART.MAIN)  # Orange
-            new_badge.add_flag(lv.obj.FLAG.HIDDEN)
+            global new_badge_icon
+            new_badge_icon = lv.img(scr)
+            # Default icon source; will be updated per priority on new message
+            new_badge_icon.set_src("A:apps/ntfy/resources/default.png")
+            new_badge_icon.align(lv.ALIGN.TOP_RIGHT, -10, 4)
+            # Hide until a new message arrives
+            new_badge_icon.add_flag(lv.obj.FLAG.HIDDEN)
         except Exception as _:
+            # Fallback is to do nothing; we keep UI functional without icon
             pass
         
-        # Separator line (under title)
-        line_points = [{"x": 10, "y": 30}, {"x": 310, "y": 30}]
+        # Separator line (under title) - moved down 2px and made thicker
+        line_points = [{"x": 10, "y": 34}, {"x": 310, "y": 32}]
         separator_line = lv.line(scr)
         separator_line.set_points(line_points, len(line_points))
-        separator_line.set_style_line_width(3, 0)
+        separator_line.set_style_line_width(4, 0)
         separator_line.set_style_line_color(lv.color_hex(0x4488FF), 0)  # Blue when idle
         
-        # Message content area (starts right under separator)
+        # Header priority icon (aligned to the left of header line)
+        try:
+            header_prio_icon = lv.img(scr)
+            header_prio_icon.set_src("A:apps/ntfy/resources/default.png")
+            header_prio_icon.set_pos(10, 34)
+            header_prio_icon.add_flag(lv.obj.FLAG.HIDDEN)
+        except Exception:
+            header_prio_icon = None
+
+        # Message content area (starts right under separator). Shift right to leave space for icon.
         label_info = lv.label(scr)
         label_info.set_text("Fetching messages...")
-        label_info.set_pos(10, 38)
-        label_info.set_width(300)
+        label_info.set_pos(36, 34)
+        label_info.set_width(280)
         label_info.set_style_text_color(lv.color_hex(0xE0E0E0), lv.PART.MAIN)  # Light gray
         label_info.set_long_mode(lv.label.LONG.WRAP)
         label_info.set_style_text_line_space(3, lv.PART.MAIN)  # Better line spacing
@@ -321,7 +359,7 @@ async def on_start():
 
 async def on_running_foreground():
     """Called every ~200ms - fetch messages here, not on startup"""
-    global last_fetch_time, messages, current_index, label_title, new_badge, new_badge_time, last_time_seen
+    global last_fetch_time, messages, current_index, label_title, new_badge_icon, new_badge_time, last_time_seen
     
     now = utime.time()
 
@@ -329,8 +367,10 @@ async def on_running_foreground():
     if now - last_fetch_time < fetch_interval:
         # Also handle NEW badge timeout
         try:
+            # Auto-hide the priority icon after timeout to reduce visual noise
             if new_badge_time and (now - new_badge_time) >= NEW_BADGE_TIMEOUT:
-                new_badge.add_flag(lv.obj.FLAG.HIDDEN)
+                if new_badge_icon:
+                    new_badge_icon.add_flag(lv.obj.FLAG.HIDDEN)
                 new_badge_time = 0
         except Exception:
             pass
@@ -412,16 +452,30 @@ async def on_running_foreground():
                         # Detect new message arrival
                         latest_time = messages[0].get('time', 0) if messages else 0
                         if latest_time and latest_time > previous_latest_time:
-                            # Jump to newest and show badge
+                            # Jump to newest and show priority icon badge
                             current_index = 0
                             try:
-                                new_badge.clear_flag(lv.obj.FLAG.HIDDEN)
+                                # Select icon based on priority of the newest message
+                                newest_prio = messages[0].get('priority', 3)
+                                prio_icon_map = {
+                                    1: "A:apps/ntfy/resources/min.png",
+                                    2: "A:apps/ntfy/resources/low.png",
+                                    3: "A:apps/ntfy/resources/default.png",
+                                    4: "A:apps/ntfy/resources/high.png",
+                                    5: "A:apps/ntfy/resources/max.png",
+                                }
+                                icon_src = prio_icon_map.get(newest_prio, "A:apps/ntfy/resources/default.png")
+                                if new_badge_icon:
+                                    new_badge_icon.set_src(icon_src)  # Update icon to match priority
+                                    new_badge_icon.clear_flag(lv.obj.FLAG.HIDDEN)  # Show icon
                                 new_badge_time = now
                             except Exception:
                                 pass
                         else:
                             try:
-                                new_badge.add_flag(lv.obj.FLAG.HIDDEN)
+                                # No newer message; ensure icon is hidden
+                                if new_badge_icon:
+                                    new_badge_icon.add_flag(lv.obj.FLAG.HIDDEN)
                                 new_badge_time = 0
                             except Exception:
                                 pass

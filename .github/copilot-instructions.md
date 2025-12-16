@@ -336,9 +336,22 @@ while($port.IsOpen) {
 ### Upload + Monitor Workflow
 ```powershell
 # Terminal 1: Upload app (closes after upload completes)
-cd D:\daevid\Code\Vobot\ntfy
-../.venv/Scripts/ampy.exe --port COM4 --baud 115200 --delay 1 put apps/ntfy /apps/ntfy
-
+# From repository root (PowerShell example); prefer module invocation
+cd .\
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 1 put ntfy/apps/ntfy /apps/ntfy
+```
+If you see the error "Failed to canonicalize script path" when invoking the venv `ampy.exe`, use the module entrypoint instead (recommended):
+```powershell
+& ".\.venv\Scripts\python.exe" -m pip install --upgrade adafruit-ampy
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 1 put ntfy/apps/ntfy /apps/ntfy
+```
+Alternatively, install `adafruit-ampy` system-wide and use the global `ampy` command:
+```powershell
+pip install --user adafruit-ampy
+ampy --port COM4 --baud 115200 --delay 1 put ntfy/apps/ntfy /apps/ntfy
+```
+If you prefer a GUI uploader, use Thonny (recommended) — it handles the device filesystem reliably.
+```powershell
 # Terminal 2: Monitor logs in real-time (keep running)
 $port = New-Object System.IO.Ports.SerialPort COM4, 115200, None, 8, One
 $port.Open()
@@ -346,7 +359,6 @@ while($port.IsOpen) {
     try { $byte = $port.ReadChar(); [Console]::Write([char]$byte) } 
     catch { Start-Sleep -Milliseconds 100 } 
 }
-
 # On Vobot device: Press button to launch app and see logs immediately
 ```
 
