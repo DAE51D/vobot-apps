@@ -28,23 +28,11 @@ Displays push notifications from an ntfy server on your Vobot Mini Dock. Navigat
 <p align="center"><em>Web Setup Interface</em></p>
 </td>
 <td width="50%">
-<img src="./ntfy_normal_message.jpg" alt="Normal priority message" />
-<p align="center"><em>Normal Priority (Green)</em></p>
-</td>
-</tr>
-<tr>
-<td width="50%">
-<img src="./ntfy_high_message.jpg" alt="High priority message" />
-<p align="center"><em>High Priority (Orange)</em></p>
-</td>
-<td width="50%">
-<img src="./ntfy_critical_message.jpg" alt="Critical priority message" />
+<img src="./ntfy_critical_message.jpg" alt="Normal priority message" />
 <p align="center"><em>Critical Priority (Red)</em></p>
 </td>
 </tr>
 </table>
-
-
 
 ## Requirements
 
@@ -54,7 +42,7 @@ Displays push notifications from an ntfy server on your Vobot Mini Dock. Navigat
 
 ## Quick Start
 
-See the main [repository README](../../README.md) for general setup and installation instructions.
+See the main [repository README](../README.md) for general setup and installation instructions.
 
 ### ntfy Server Configuration
 
@@ -79,11 +67,28 @@ To return to normal operation:
 ```powershell
 .venv\Scripts\python.exe -m py_compile apps/ntfy/__init__.py
 
-# push to Vobot
-Start-Sleep -Seconds 1; .venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay 2 put apps/ntfy /apps/ntfy
-# or this
- Get-Process | Where-Object {$_.Name -eq 'pwsh' -and $_.Id -ne $PID} | Stop-Process -Force; Start-Sleep -Seconds 2; .venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay 2 put apps/ntfy /apps/ntfy
+# Push to Vobot (Windows PowerShell example - run from repository root)
+# Simple upload (use the `ntfy/apps/ntfy` local path)
+Start-Sleep -Seconds 1; & ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 2 put ntfy/apps/ntfy /apps/ntfy
+# Force-stop other PowerShell instances then upload (if needed)
+Get-Process | Where-Object {$_.Name -eq 'pwsh' -and $_.Id -ne $PID} | Stop-Process -Force; Start-Sleep -Seconds 2; & ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 2 put ntfy/apps/ntfy /apps/ntfy
+
+### Troubleshooting `ampy.exe`
+If you encounter "Failed to canonicalize script path" when running the venv `ampy.exe`, prefer the module entrypoint instead:
+
+```powershell
+& ".\.venv\Scripts\python.exe" -m pip install --upgrade adafruit-ampy
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 2 put ntfy/apps/ntfy /apps/ntfy
 ```
+
+Or install `adafruit-ampy` globally and use the `ampy` command from PATH:
+
+```powershell
+pip install --user adafruit-ampy
+ampy --port COM4 --baud 115200 --delay 2 put ntfy/apps/ntfy /apps/ntfy
+```
+
+When in doubt, use Thonny's file view to upload the `ntfy` folder to `/apps/ntfy` — it is the most reliable option on Windows.
 
 ## Usage
 
@@ -100,9 +105,9 @@ Start-Sleep -Seconds 1; .venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay
 Header (below the horizontal separator):
 
 ```
-[P|L] http://ntfy.home.lan/topic
+[P|L] http://ntfy.home.lan/topic  {new icon}
 — line color reflects priority (green=Normal, orange=High, red=Critical, blue=Low, gray=Min)
-[1/5] {priority} - mm/dd h:mm pm
+{icon} [1/5] {priority} - mm/dd h:mm pm
 
 Title <if exists>
 The message body goes here...
@@ -164,7 +169,7 @@ Optional headers:
 
 ## Technical Details
 
-- **Version:** 0.0.7
+- **Version:** 1.0.0
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x
 - **Dependencies:** urequests, ujson, utime
@@ -177,11 +182,7 @@ Optional headers:
 - [Vobot Developer Docs](https://dock.myvobot.com/developer/)
 - [Official Vobot Apps](https://github.com/myvobot/dock-mini-apps)
 - [My Vobot Community Forum Announcement](https://discuss.myvobot.com/t/nfty-app-polls-a-ntfy-server-and-displays-last-n-messages-with-new-ones-surface-to-top-configurable/385)
-
----
-
-- **Version:** 0.0.8  
-- **Last Updated:** December 14, 2025
+- [My announcement "issue" the ntfy Github repo](https://github.com/binwiederhier/ntfy/issues/1514)
 
 ## Connection Modes
 
@@ -211,8 +212,22 @@ SSE (Server-Sent Events) mode was tested but removed due to architectural limita
 
 If you need SSE-level responsiveness, long-poll is the recommended alternative.
 
+## Authentication
+
+**Currently there is no user/password or token authentication.** 
+I don't use it as my ntfy LXC is on my home LAN and not exposed.
+
+If enough people ask for it, I could add it, but given the niche demographic here, I decided not to bloat the app with needless code.
+
+- https://docs.ntfy.sh/config/#access-tokens
+
 ## License
 
 [baba-yaga](https://github.com/ErikMcClure/bad-licenses/blob/master/baba-yaga)
 
 In other words, YOLO. IDGAF what you do with this. Have fun. Make it better. Make a million dollars off it. Learn something new (as I did). Make the community a better place by contributing to it something for the sad sad "[app store](https://app.myvobot.com/)"
+
+---
+
+- **Version:** 1.0.0  
+- **Last Updated:** December 14, 2025
