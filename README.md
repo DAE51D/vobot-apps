@@ -2,6 +2,10 @@
 
 A collection of custom applications for the Vobot Mini Dock smart display.
 
+# What's a Vobot
+
+Basically it's this sweet little computer dock (you know with all kinds of extra ports) that you can get for about [$50 on Amazon](https://www.amazon.com/dp/B0FF4KK446) but it has a display and a wheel that you can then install apps from their store (it's pretty sparse TBH). But the real reason I got it is so that *I* can write apps myself for it. Please to enjoy...
+
 ## Repository Structure
 
 ```
@@ -32,7 +36,7 @@ A notification viewer for self-hosted ntfy servers. Displays push notifications 
 
 **Status:** 🚧 In Development (v0.0.2)
 
-See [ntfy/apps/ntfy/README.md](ntfy/apps/ntfy/README.md) for details.
+See [ntfy/apps/ntfy/README.md](ntfy/README.md) for details.
 
 ## Vobot Mini Dock Platform
 
@@ -79,8 +83,9 @@ To install custom apps, enable Developer Mode:
 # Install ampy
 pip install adafruit-ampy
 
-# Upload app (Windows example)
-ampy --port COM4 --baud 115200 --delay 2 put apps/ntfy /apps/ntfy
+# Upload app (Windows PowerShell example - run from repository root)
+# Prefer module invocation to avoid Windows EXE shim issues
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 2 put ntfy/apps/ntfy /apps/ntfy
 ```
 
 **Using VS Code Pymakr:**
@@ -94,7 +99,14 @@ ampy --port COM4 --baud 115200 --delay 2 put apps/ntfy /apps/ntfy
 
 **Thonny:** View → Files → Right-click app folder → Delete → Ctrl+D
 
-**ampy:** `ampy --port COM4 rmdir /apps/<app_name>`
+**ampy:** `& ".\.venv\Scripts\ampy.exe" --port COM4 rmdir /apps/<app_name>`
+
+If `ampy.exe` returns "Failed to canonicalize script path", use the module entrypoint instead (recommended):
+
+```powershell
+& ".\.venv\Scripts\python.exe" -m pip install --upgrade adafruit-ampy
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 2 put ntfy/apps/ntfy /apps/ntfy
+```
 
 ### Debugging
 
@@ -142,7 +154,15 @@ while($port.IsOpen) {
 - [Official Vobot Apps Repository](https://github.com/myvobot/dock-mini-apps)
 - [User Forum](https://discuss.myvobot.com/)
 - [Vobot Mini Dock Simulator](https://dock.myvobot.com/developer/mini_dock_emulator/)
+
+## Publishing
+
 - [Vobot Publishing Guide](https://dock.myvobot.com/developer/guides/publishing-guide/)
+
+Use the `dock-app-bundler-win.exe` and choose `D:\daevid\Code\Vobot\ntfy\apps\ntfy` it will bundle up a `ntfy.vbt` file, 
+save it in the parent folder: `D:\daevid\Code\Vobot\ntfy\apps`
+
+Login to https://app.myvobot.com/profile 
 
 ## Contributing
 

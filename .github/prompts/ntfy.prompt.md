@@ -1,6 +1,6 @@
 ---
 agent: 'agent'
-tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'web/fetch', 'web/githubRepo', 'read/problems', 'search', 'search/searchResults', 'search/usages', 'github/*', 'pylance-mcp-server/*']
+tools: ['search','edit', 'web', 'read','github/*']
 description: 'Implement ntfy client for Vobot Mini Dock'
 ---
 
@@ -216,8 +216,8 @@ Should yield example like this:
 
 ```powershell
 # Terminal 1: Upload latest code (ampy will disconnect after upload)
-cd D:\daevid\Code\Vobot\nfty
-.venv\Scripts\ampy.exe --port COM4 --baud 115200 --delay 1 put ntfy /apps/ntfy
+# From repository root (PowerShell example); prefer module invocation
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 1 put ntfy/apps/ntfy /apps/ntfy
 
 # Terminal 2: Monitor logs continuously (run in separate PowerShell window)
 $port = New-Object System.IO.Ports.SerialPort COM4, 115200, None, 8, One
@@ -344,11 +344,11 @@ print(msg['message'])  # Output: Hello
 
 Common commands (from project root):
 ```powershell
-# Upload app to /apps/ntfy
-D:/daevid/Code/Vobot/nfty/.venv/Scripts/ampy.exe --port COM4 --baud 115200 --delay 1 put ntfy /apps/ntfy
+# Upload app to /apps/ntfy (run from repository root)
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 1 put ntfy/apps/ntfy /apps/ntfy
 
 # List apps to verify
-D:/daevid/Code/Vobot/nfty/.venv/Scripts/ampy.exe --port COM4 --baud 115200 ls /apps
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 ls /apps
 
 # Optional: check port mapping
 Get-CimInstance -ClassName Win32_SerialPort | Select-Object Name, DeviceID, Description | Format-Table -AutoSize
