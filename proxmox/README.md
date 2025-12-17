@@ -20,7 +20,7 @@ Navigate through screens with the rotary wheel.
 <table>
 <tr>
 <td width="50%">
-<img src="./proxmox_web_page.png" alt="Web configuration page" />
+<img src="./settings.png" alt="Web configuration page" />
 <p align="center"><em>Web Setup Interface</em></p>
 </td>
 <td width="50%">
@@ -73,7 +73,6 @@ ampy --port COM4 --baud 115200 --delay 2 put proxmox/apps/proxmox /apps/proxmox
 ```
 
 When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/proxmox` — it is the most reliable option on Windows.
-
 
 ## Technical Details
 
