@@ -28,6 +28,11 @@ label_title = None
 label_page1 = None
 label_page2 = None
 label_page3 = None
+gauge_container = None
+gauge_cpu = None
+gauge_ram = None
+gauge_netin = None
+gauge_netout = None
 current_page = 0  # 0=page1, 1=page2, 2=page3
 last_fetch_time = -999  # Force immediate first fetch
 
@@ -102,9 +107,66 @@ def format_uptime(seconds):
     return f"{days:02d}:{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def create_gauge(parent, x, y, size, label_text, color_hex):
+    """Create a circular gauge widget with arc and label"""
+    # Container for gauge
+    gauge_obj = lv.obj(parent)
+    gauge_obj.set_size(size, size)
+    gauge_obj.set_pos(x, y)
+    gauge_obj.set_style_bg_color(lv.color_hex(0x222222), lv.PART.MAIN)
+    gauge_obj.set_style_border_width(1, lv.PART.MAIN)
+    gauge_obj.set_style_border_color(lv.color_hex(0x444444), lv.PART.MAIN)
+    gauge_obj.set_style_radius(5, lv.PART.MAIN)
+    gauge_obj.set_style_pad_all(2, lv.PART.MAIN)
+    
+    # Arc for progress
+    arc = lv.arc(gauge_obj)
+    arc.set_size(size - 8, size - 8)
+    arc.set_style_arc_color(lv.color_hex(color_hex), lv.PART.INDICATOR)
+    arc.set_style_arc_color(lv.color_hex(0x333333), lv.PART.MAIN)
+    arc.set_style_arc_width(4, lv.PART.MAIN)
+    arc.set_value(0)
+    arc.center()
+    
+    # Percentage label (center)
+    pct_label = lv.label(gauge_obj)
+    pct_label.set_style_text_font(lv.font_ascii_bold_28, lv.PART.MAIN)
+    pct_label.set_style_text_color(lv.color_hex(color_hex), lv.PART.MAIN)
+    pct_label.set_text("0%")
+    pct_label.center()
+    
+    # Title label (bottom)
+    title_label = lv.label(gauge_obj)
+    title_label.set_style_text_font(lv.font_ascii_14, lv.PART.MAIN)
+    title_label.set_style_text_color(lv.color_hex(0xCCCCCC), lv.PART.MAIN)
+    title_label.set_text(label_text)
+    title_label.align(lv.ALIGN.BOTTOM_MID, 0, -2)
+    
+    # Store references for updating
+    gauge_obj._arc = arc
+    gauge_obj._pct_label = pct_label
+    
+    return gauge_obj
+
+
+def update_gauge(gauge_obj, value_pct):
+    """Update gauge arc and percentage"""
+    if not gauge_obj or not hasattr(gauge_obj, '_arc'):
+        return
+    
+    # Clamp to 0-100
+    value_pct = max(0, min(100, value_pct))
+    
+    # Update arc (0-100 maps to 0-360)
+    gauge_obj._arc.set_value(value_pct)
+    
+    # Update label
+    gauge_obj._pct_label.set_text(f"{int(value_pct)}%")
+
+
 def update_display():
     """Update the display with current metrics"""
-    global current_page, label_page1, label_page2, label_page3
+    global current_page, label_page1, label_page2, label_page3, gauge_container
     global lxc_running, lxc_total, vm_running, vm_total
     global node_cpu_pct, node_mem_used_gb, node_mem_total_gb
     global node_uptime_sec, node_netin_bytes, node_netout_bytes
@@ -156,21 +218,31 @@ def update_display():
         print(f"[DBG] Page 2 updated")
         
     elif current_page == 2:
-        # Page 3: Placeholder for graphical widgets
-        if not label_page3:
+        # Page 3: Graphical gauges
+        if not gauge_container:
             return
-        label_page3.clear_flag(lv.obj.FLAG.HIDDEN)
+        gauge_container.clear_flag(lv.obj.FLAG.HIDDEN)
         
-        text = "=== Page 3: Graphs ===\n\n"
-        text += f"CPU: {node_cpu_pct:.1f}%\n"
-        text += f"RAM: {node_mem_used_gb:.1f}/"
-        text += f"{node_mem_total_gb:.1f} GB\n"
-        text += f"Net In: {node_netin_bytes / (1024**2):.1f} MB\n"
-        text += f"Net Out: {node_netout_bytes / (1024**2):.1f} MB\n\n"
-        text += "(Graphical widgets\ncoming soon)"
+        # Update gauge values
+        if gauge_cpu:
+            update_gauge(gauge_cpu, node_cpu_pct)
         
-        label_page3.set_text(text)
-        print(f"[DBG] Page 3 updated")
+        if gauge_ram:
+            ram_pct = (node_mem_used_gb / max(node_mem_total_gb, 1)) * 100.0
+            update_gauge(gauge_ram, ram_pct)
+        
+        if gauge_netin:
+            # Scale network to 0-100 (assuming max 100 MB/s is "full")
+            netin_mb = node_netin_bytes / (1024**2)
+            netin_pct = min(100, (netin_mb / 100.0) * 100.0) if netin_mb > 0 else 0
+            update_gauge(gauge_netin, netin_pct)
+        
+        if gauge_netout:
+            netout_mb = node_netout_bytes / (1024**2)
+            netout_pct = min(100, (netout_mb / 100.0) * 100.0) if netout_mb > 0 else 0
+            update_gauge(gauge_netout, netout_pct)
+        
+        print(f"[DBG] Page 3 gauges updated")
 
 
 async def on_boot(apm):
@@ -278,6 +350,22 @@ async def on_start():
     label_page3.set_style_text_color(lv.color_hex(0xFFFFFF), lv.PART.MAIN)
     label_page3.add_flag(lv.obj.FLAG.HIDDEN)
     print("[DBG] Created page 3 label")
+    
+    # Page 3 gauge container (2x2 grid for gauges: CPU, RAM, Net In, Net Out)
+    gauge_container = lv.obj(scr)
+    gauge_container.set_size(320, 240)
+    gauge_container.set_pos(0, 0)
+    gauge_container.set_style_bg_opa(lv.OPA._0, lv.PART.MAIN)
+    gauge_container.set_style_border_width(0, lv.PART.MAIN)
+    gauge_container.add_flag(lv.obj.FLAG.HIDDEN)
+    print("[DBG] Created gauge container")
+    
+    # Create gauges in 2x2 grid (each 140x100)
+    gauge_cpu = create_gauge(gauge_container, 5, 35, 150, "CPU", 0xFF6B6B)
+    gauge_ram = create_gauge(gauge_container, 165, 35, 150, "RAM", 0x4ECDC4)
+    gauge_netin = create_gauge(gauge_container, 5, 135, 150, "Net In", 0x45B7D1)
+    gauge_netout = create_gauge(gauge_container, 165, 135, 150, "Net Out", 0x96CEB4)
+    print("[DBG] Created all gauges")
     
     # Load screen
     lv.scr_load(scr)
@@ -417,11 +505,31 @@ async def on_running_foreground():
                     node_mem_total_gb = mem_total / (1024**3)
                     
                     node_uptime_sec = node.get("uptime", 0)
+                    
+                    # Try to get network stats from cluster resources (may be 0)
                     node_netin_bytes = node.get("netin", 0)
                     node_netout_bytes = node.get("netout", 0)
                     
                     print(f"[DBG] Node: cpu={node_cpu_pct:.1f}% mem={node_mem_used_gb:.1f}/{node_mem_total_gb:.1f}GB")
-                    print(f"[DBG] Uptime: {format_uptime(node_uptime_sec)} Net: {node_netin_bytes/(1024**2):.1f}/{node_netout_bytes/(1024**2):.1f}MB")
+                    print(f"[DBG] Uptime: {format_uptime(node_uptime_sec)}")
+                    print(f"[DBG] Net from cluster: in={node_netin_bytes} out={node_netout_bytes}")
+                    
+                    # Try /nodes/{node}/status for more detailed network stats
+                    try:
+                        url_status = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/status"
+                        resp_status = requests.get(url_status, headers=headers, timeout=5)
+                        if resp_status.status_code == 200:
+                            status_data = ujson.loads(resp_status.text).get("data", {})
+                            # Check for network interface stats
+                            if "netin" in status_data:
+                                node_netin_bytes = status_data.get("netin", node_netin_bytes)
+                            if "netout" in status_data:
+                                node_netout_bytes = status_data.get("netout", node_netout_bytes)
+                            print(f"[DBG] Net from status: in={node_netin_bytes/(1024**2):.1f}MB out={node_netout_bytes/(1024**2):.1f}MB")
+                        resp_status.close()
+                    except Exception as e:
+                        print(f"[DBG] Status endpoint failed: {e} (using cluster values)")
+                    
                     break
         
         resp.close()
@@ -445,7 +553,8 @@ async def on_running_foreground():
 
 async def on_stop():
     """Cleanup on app exit"""
-    global scr, label_title, label_page1, label_page2, label_page3
+    global scr, label_title, label_page1, label_page2, label_page3, gauge_container
+    global gauge_cpu, gauge_ram, gauge_netin, gauge_netout
     print("[DBG] on_stop() called")
     
     if scr:
@@ -457,3 +566,8 @@ async def on_stop():
     label_page1 = None
     label_page2 = None
     label_page3 = None
+    gauge_container = None
+    gauge_cpu = None
+    gauge_ram = None
+    gauge_netin = None
+    gauge_netout = None

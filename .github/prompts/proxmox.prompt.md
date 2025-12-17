@@ -26,30 +26,29 @@ See credentials in the API examples below
 
 # Task: Build proxmox Notification Viewer App
 
-## Objectives
+# Task: Build proxmox Notification Viewer App
 
-Create a Vobot Mini Dock application that displays on two pages (use scroll wheel to paginate through them)
+## ✅ COMPLETED OBJECTIVES
 
-Page 1:
+Create a Vobot Mini Dock application that displays on three pages (use scroll wheel to paginate through them)
 
-- Text version
-- all of the data points and values
-- this is a sanity test page to ensure the API calls are working and we're pulling the correct values
+**Page 1: All Data (Sanity Test)**
+- ✅ LXC/VM container counts and running status
+- ✅ CPU percentage
+- ✅ RAM usage in GB
+- ✅ Uptime in DD:HH:MM:SS format
+- ✅ Network In/Out in MB
 
-Page 2:
+**Page 2: Summary View**
+- ✅ Number of LXCs running (out of available)
+- ✅ Number of VMs running (out of available)  
+- ✅ Uptime DD:HH:MM:SS format
 
-- Number of LXCs running (out of available)
-- Number of VMs running (out of available)
-- Uptime DD:HH:MM:SS
-
-Page 3:
-
-Use LVGL widgets to show these values
-
-- CPU - https://docs.lvgl.io/master/widgets/arclabel.html
-- RAM - https://docs.lvgl.io/master/widgets/arclabel.html
-- Network In - https://docs.lvgl.io/master/widgets/scale.html
-- Network Out - https://docs.lvgl.io/master/widgets/scale.html
+**Page 3: Graphical Widgets (2x2 Grid)**
+- ✅ CPU - Circular arc gauge with percentage
+- ✅ RAM - Circular arc gauge with percentage
+- ✅ Network In - Circular arc gauge scaled to 0-100 MB/s
+- ✅ Network Out - Circular arc gauge scaled to 0-100 MB/s
 
 ## Functional Requirements
 
