@@ -1,6 +1,6 @@
 application:
   name: Proxmox
-  version: 0.0.6
+  version: 0.0.5
   author: Daevid
   description: Display Proxmox node metrics and VM/LXC counts
   icon: A:apps/proxmox/resources/icon.png
@@ -15,4 +15,4 @@ files:
   include:
     - __init__.py
     - manifest.yml
-    - resources/*
+    - resources/
