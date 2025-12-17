@@ -7,7 +7,7 @@ import urequests as requests
 import ujson
 import utime
 
-VERSION = "0.0.4"
+VERSION = "0.0.6"
 __version__ = VERSION
 NAME = "Proxmox"
 # A file path or data (bytes type) of the logo image for this app.
@@ -64,15 +64,15 @@ def get_settings_json():
             },
             {
                 "type": "input",
-                "default": "proxmox",
+                "default": "pve",
                 "caption": "Node Name",
                 "name": "node_name",
-                "attributes": {"maxLength": 50, "placeholder": "proxmox"},
+                "attributes": {"maxLength": 50, "placeholder": "pve"},
                 "tip": "Cluster node name"
             },
             {
                 "type": "input",
-                "default": "api@pam!homepage",
+                "default": "user@realm!token",
                 "caption": "API Token ID",
                 "name": "api_token_id",
                 "attributes": {"maxLength": 100, "placeholder": "user@realm!token"},
@@ -180,6 +180,8 @@ def update_display():
         label_page2.add_flag(lv.obj.FLAG.HIDDEN)
     if label_page3:
         label_page3.add_flag(lv.obj.FLAG.HIDDEN)
+    if gauge_container:
+        gauge_container.add_flag(lv.obj.FLAG.HIDDEN)
     
     # Show current page
     if current_page == 0:
@@ -368,11 +370,11 @@ async def on_start():
     print("[DBG] Created all gauges")
     
     # Load screen
-    lv.scr_load(scr)
+    lv.screen_load(scr)
     print("[DBG] Screen loaded")
     
-    # Setup input handling (encoder + buttons)
-    scr.add_event(event_handler, lv.EVENT.ALL, None)
+    # Setup input handling (encoder + buttons) - use add_event_cb
+    scr.add_event_cb(event_handler, lv.EVENT.ALL, None)
     group = lv.group_get_default()
     if group:
         group.add_obj(scr)
@@ -380,8 +382,21 @@ async def on_start():
         group.set_editing(True)
         print("[DBG] Input group configured")
     
-    # Force initial display update
-    update_display()
+    # Check if settings are configured, show warning if not
+    if not API_SECRET or not API_TOKEN_ID or API_TOKEN_ID == "api@pam!homepage":
+        label_page1.set_text(
+            "⚠️ CONFIGURATION REQUIRED\n\n"
+            "Please configure:\n"
+            "• API Token ID\n"
+            "• API Secret\n\n"
+            "Visit:\nhttp://192.168.1.32/apps\n\n"
+            "Press ENTER to refresh"
+        )
+        print("[WARN] Settings not configured - showing config reminder")
+    else:
+        # Force initial display update
+        update_display()
+    
     print("[DBG] on_start() complete")
 
 
@@ -390,16 +405,18 @@ def event_handler(e):
     global current_page, last_fetch_time
     
     e_code = e.get_code()
+    print(f"[DBG] Event code: {e_code}, KEY event value={lv.EVENT.KEY}")
+    
     if e_code == lv.EVENT.KEY:
         e_key = e.get_key()
-        print(f"[DBG] Key event: {e_key}")
+        print(f"[DBG] Key pressed: {e_key} (LEFT={lv.KEY.LEFT}, RIGHT={lv.KEY.RIGHT}, ENTER={lv.KEY.ENTER}, ESC={lv.KEY.ESC})")
         
-        if e_key == lv.KEY.LEFT:  # Encoder clockwise = next page
+        if e_key == lv.KEY.LEFT:  # Encoder rotates left = next page
             current_page = (current_page + 1) % 3
             print(f"[DBG] → Next page: {current_page + 1}/3")
             update_display()
             
-        elif e_key == lv.KEY.RIGHT:  # Encoder CCW = previous page
+        elif e_key == lv.KEY.RIGHT:  # Encoder rotates right = previous page
             current_page = (current_page - 1) % 3
             print(f"[DBG] ← Previous page: {current_page + 1}/3")
             update_display()
@@ -407,10 +424,12 @@ def event_handler(e):
         elif e_key == lv.KEY.ENTER:  # Manual refresh
             print("[DBG] Manual refresh triggered")
             last_fetch_time = -999
-            
+    
     elif e_code == lv.EVENT.FOCUSED:
-        if not lv.group_get_default().get_editing():
-            lv.group_get_default().set_editing(True)
+        print("[DBG] Screen focused - enabling edit mode")
+        lv_group = lv.group_get_default()
+        if lv_group and not lv_group.get_editing():
+            lv_group.set_editing(True)
 
 
 async def on_running_foreground():
