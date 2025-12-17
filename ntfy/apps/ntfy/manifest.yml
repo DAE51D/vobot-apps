@@ -17,3 +17,4 @@ files:
   include:
     - __init__.py
     - manifest.yml
+    - resources/
