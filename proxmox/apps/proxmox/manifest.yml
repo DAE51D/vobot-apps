@@ -1,0 +1,18 @@
+application:
+  name: Proxmox
+  version: 0.0.4
+  author: Daevid
+  description: Display Proxmox node metrics and VM/LXC counts
+  icon: A:apps/proxmox/resources/icon.png
+  category: Utility
+
+system_requirements:
+  minimum_version: 1.1.0
+  compatible_devices:
+    - MiniDock
+
+files:
+  include:
+    - __init__.py
+    - manifest.yml
+    - resources/*

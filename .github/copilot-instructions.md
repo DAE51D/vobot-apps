@@ -33,7 +33,7 @@ your_app/
 - Maximum app size: 200KB (including all resources)
 - Total app filesystem space: 900KB for all apps combined
 - Optimize for minimal memory footprint
-- Icon is 48x48 (resize accordingly)
+- [Icon](https://dock.myvobot.com/developer/guides/app-design/) is 48x48 (resize accordingly)
 
 ### Application Lifecycle
 
@@ -44,6 +44,9 @@ import lvgl as lv
 
 # Required: App name
 NAME = "Your App Name"
+# A file path or data (bytes type) of the logo image for this app.
+# If not specified, the default icon will be applied.
+ICON = "A:apps/yourapp/resources/icon.png"
 
 # LVGL widgets and app manager (globals)
 scr = None
