@@ -11,6 +11,8 @@ import clocktime
 VERSION = "1.0.0"
 __version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
+# A file path or data (bytes type) of the logo image for this app.
+# If not specified, the default icon will be applied.
 ICON = "A:apps/ntfy/resources/icon.png"
 
 # MicroPython uses 2000-01-01 epoch, Unix uses 1970-01-01
