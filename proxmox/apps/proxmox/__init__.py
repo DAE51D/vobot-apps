@@ -5,7 +5,7 @@ import ujson
 import utime
 
 NAME = "Proxmox"
-VERSION = "0.0.5"
+VERSION = "0.0.6"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
 
@@ -198,7 +198,8 @@ def show_debug_page():
     uptime_m = (_metrics['uptime'] % 3600) // 60
     uptime_s = _metrics['uptime'] % 60
     
-    text = f"DEBUG DATA (Page 1/2)\n\n"
+    text = f"DEBUG DATA (Page 2/2)\n"
+    text += f"Up: {uptime_d}d {uptime_h}:{uptime_m:02d}:{uptime_s:02d}\n"
     text += f"CPU: {_metrics['cpu']}%\n"
     text += f"RAM: {_metrics['mem_pct']}% ({_metrics['mem_used']}/{_metrics['mem_total']}GB)\n"
     text += f"Swap: {_metrics['swap_pct']}% ({_metrics['swap_used']}/{_metrics['swap_total']}GB)\n"
@@ -206,8 +207,7 @@ def show_debug_page():
     text += f"Net Up: {_metrics['netout']:.0f} KB/s\n"
     text += f"Net Dn: {_metrics['netin']:.0f} KB/s\n"
     text += f"VMs: {_metrics['vm_running']}/{_metrics['vm_total']}\n"
-    text += f"LXCs: {_metrics['lxc_running']}/{_metrics['lxc_total']}\n"
-    text += f"Up: {uptime_d}d {uptime_h}:{uptime_m:02d}:{uptime_s:02d}"
+    text += f"LXCs: {_metrics['lxc_running']}/{_metrics['lxc_total']}"
     
     debug_label.set_text(text)
     debug_label.align(lv.ALIGN.TOP_LEFT, 8, 8)
@@ -234,7 +234,7 @@ def show_main_page():
     tl.add_style(container_style, lv.PART.MAIN)
     
     cpu_label = lv.label(tl)
-    cpu_label.set_text(f"{_metrics['cpu']}%\nCPU")
+    cpu_label.set_text(f"{_metrics['cpu']}%\nCPU\n\n72")
     cpu_label.center()
     cpu_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
     cpu_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
