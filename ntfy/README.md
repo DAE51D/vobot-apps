@@ -183,6 +183,7 @@ Optional headers:
 - [Official Vobot Apps](https://github.com/myvobot/dock-mini-apps)
 - [My Vobot Community Forum Announcement](https://discuss.myvobot.com/t/nfty-app-polls-a-ntfy-server-and-displays-last-n-messages-with-new-ones-surface-to-top-configurable/385)
 - [My announcement "issue" the ntfy Github repo](https://github.com/binwiederhier/ntfy/issues/1514)
+- [App in gallery](https://app.myvobot.com/app-detail/ntfy) ID: `6940c5ce565a2f001d74ad12`
 
 ## Connection Modes
 
