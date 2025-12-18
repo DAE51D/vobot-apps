@@ -30,26 +30,36 @@ See credentials in the API examples below
 
 Create a Vobot Mini Dock application that displays on two pages (use scroll wheel to paginate through them)
 
+https://docs.lvgl.io/master/widgets/
+
 Page 1:
+
+- four quadrants. Use proxmox/pc_hw_mockup.jpg as emulation
+- top left: 
+  - CPU % using LVGL arc
+  - CPU: total
+- top right:
+  - RAM % using LVGL arc
+  - RAM: used / total
+- bottom left:
+  - Network In Kb/s
+  - Network In line graph
+  - Network Out KB/s
+  - Network Out line graph
+  - use green and red arrows on text lines
+- bottom right:
+  - VMs: running / total
+  - line graph like network %
+  - LXCs: running / total
+  - line graph like VMs %
+  
+Page 2:
 
 - Text version
 - all of the data points and values
 - this is a sanity test page to ensure the API calls are working and we're pulling the correct values
-
-Page 2:
-
-- Number of LXCs running (out of available)
-- Number of VMs running (out of available)
 - Uptime DD:HH:MM:SS
-
-Page 3:
-
-Use LVGL widgets to show these values
-
-- CPU - https://docs.lvgl.io/master/widgets/arclabel.html
-- RAM - https://docs.lvgl.io/master/widgets/arclabel.html
-- Network In - https://docs.lvgl.io/master/widgets/scale.html
-- Network Out - https://docs.lvgl.io/master/widgets/scale.html
+- use smaller font if needed to squeeze it all on the page: https://dock.myvobot.com/developer/guides/app-interface-guide/#currently-supported-fonts
 
 ## Functional Requirements
 

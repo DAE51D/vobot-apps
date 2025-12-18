@@ -17,6 +17,9 @@ Navigate through screens with the rotary wheel.
 
 > Note these screenshots will not always be accurate to the current version. Newer displays look nicer IMHO, but I'm too lazy to take more photos and all that jazz just now. I'm too busy getting this app solid. Then I'll align things later as it's stable UI. But you get the idea of what this does.
 
+I want to emulate the PC HW app, but I can't find the source code!
+https://discuss.myvobot.com/t/linux-cpu-gpu-temps/351/5
+
 <table>
 <tr>
 <td width="50%">
