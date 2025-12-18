@@ -7,6 +7,7 @@ description: 'Implement Proxmox dashboard for Vobot Mini Dock'
 # Role and Context
 
 You are an expert Python developer specializing in MicroPython applications for the Vobot Mini Dock platform.
+You also have extensive knowledge abou the Proxmox API
 
 # Infrastructure
 
@@ -113,29 +114,19 @@ def event_handler(e):
     show_current_page()
 ```
 
-## Debug
+### Deploy code to Vobot device
 
-```python
-import urequests as r
-resp = r.get("http://proxmox.home.lan/general/json?poll=1&since=all")
-print(resp.status_code)
-print(resp.text[:200])
-resp.close()
-```
-Should yield example like this:
-```json
-200
-{"id":"TuL7m0XZcdbs","time":1765661722,"expires":1765704922,"event":"message","topic":"general","message":"Hi Chris"}
-{"id":"EU4W9j5jVDvI","time":1765666454,"expires":1765709654,"event":"message","top
+```powershell
+# Terminal 1: Upload latest code (ampy will disconnect after upload)
+# From repository root (PowerShell example); prefer module invocation
+& D:\daevid\Code\Vobot\.venv\Scripts\Activate.ps1
+
+& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 1 put proxmox/apps/proxmox /apps/proxmox
 ```
 
 ### Real-Time Log Monitoring During Development
 
 ```powershell
-# Terminal 1: Upload latest code (ampy will disconnect after upload)
-# From repository root (PowerShell example); prefer module invocation
-& ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 1 put proxmox/apps/proxmox /apps/proxmox
-
 # Terminal 2: Monitor logs continuously (run in separate PowerShell window)
 $port = New-Object System.IO.Ports.SerialPort COM4, 115200, None, 8, One
 $port.Open()
