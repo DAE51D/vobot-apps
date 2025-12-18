@@ -1,0 +1,595 @@
+"""
+Proxmox Metrics Viewer for Vobot Mini Dock - Simplified Text Version
+Displays VM/LXC counts and node metrics
+"""
+import lvgl as lv
+import urequests as requests
+import ujson
+import utime
+
+VERSION = "0.0.4"
+__version__ = VERSION
+NAME = "Proxmox"
+# A file path or data (bytes type) of the logo image for this app.
+# If not specified, the default icon will be applied.
+ICON = "A:apps/proxmox/resources/icon.png"
+
+# Default settings
+PVE_HOST = "proxmox.home.lan:8006"
+NODE_NAME = "proxmox"
+API_TOKEN_ID = "api@pam!homepage"
+API_SECRET = ""  # Must be configured via web settings
+POLL_TIME = 10  # seconds between updates
+
+# Globals
+app_mgr = None
+scr = None
+label_title = None
+label_page1 = None
+label_page2 = None
+label_page3 = None
+page1_container = None
+page2_container = None
+page3_container = None
+page4_container = None
+gauge_container = None
+gauge_cpu = None
+gauge_ram = None
+gauge_netin = None
+gauge_netout = None
+current_page = 0  # 0=page1, 1=page2, 2=page3
+last_fetch_time = -999  # Force immediate first fetch
+
+# Metrics storage
+lxc_running = 0
+lxc_total = 0
+vm_running = 0
+vm_total = 0
+node_cpu_pct = 0.0
+node_mem_used_gb = 0.0
+node_mem_total_gb = 0.0
+node_uptime_sec = 0
+node_netin_bytes = 0
+node_netout_bytes = 0
+
+
+def get_settings_json():
+    """Web settings form"""
+    return {
+        "title": "Proxmox Configuration",
+        "form": [
+            {
+                "type": "input",
+                "default": "proxmox.home.lan:8006",
+                "caption": "Proxmox Host",
+                "name": "pve_host",
+                "attributes": {"maxLength": 100, "placeholder": "host:port"},
+                "tip": "Hostname and port (e.g., proxmox.home.lan:8006)"
+            },
+            {
+                "type": "input",
+                "default": "pve",
+                "caption": "Node Name",
+                "name": "node_name",
+                "attributes": {"maxLength": 50, "placeholder": "pve"},
+                "tip": "Cluster node name"
+            },
+            {
+                "type": "input",
+                "default": "user@realm!token",
+                "caption": "API Token ID",
+                "name": "api_token_id",
+                "attributes": {"maxLength": 100, "placeholder": "user@realm!token"},
+                "tip": "Format: user@realm!tokenid"
+            },
+            {
+                "type": "input",
+                "default": "",
+                "caption": "API Secret",
+                "name": "api_secret",
+                "attributes": {"maxLength": 100, "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"},
+                "tip": "API token secret (UUID format)"
+            },
+            {
+                "type": "input",
+                "default": "10",
+                "caption": "Poll Interval (seconds)",
+                "name": "poll_time",
+                "attributes": {"maxLength": 3, "placeholder": "10"},
+                "tip": "Update frequency (5-120 seconds)"
+            }
+        ]
+    }
+
+
+def format_uptime(seconds):
+    """Format uptime as DD:HH:MM:SS"""
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{days:02d}:{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def create_gauge(parent, x, y, size, label_text, color_hex):
+    """Create a circular gauge widget with arc and label"""
+    # Container for gauge
+    gauge_obj = lv.obj(parent)
+    gauge_obj.set_size(size, size)
+    gauge_obj.set_pos(x, y)
+    gauge_obj.set_style_bg_color(lv.color_hex(0x222222), lv.PART.MAIN)
+    gauge_obj.set_style_border_width(1, lv.PART.MAIN)
+    gauge_obj.set_style_border_color(lv.color_hex(0x444444), lv.PART.MAIN)
+    gauge_obj.set_style_radius(5, lv.PART.MAIN)
+    gauge_obj.set_style_pad_all(2, lv.PART.MAIN)
+    
+    # Arc for progress
+    arc = lv.arc(gauge_obj)
+    arc.set_size(size - 8, size - 8)
+    arc.set_style_arc_color(lv.color_hex(color_hex), lv.PART.INDICATOR)
+    arc.set_style_arc_color(lv.color_hex(0x333333), lv.PART.MAIN)
+    arc.set_style_arc_width(4, lv.PART.MAIN)
+    arc.set_value(0)
+    arc.center()
+    
+    # Percentage label (center)
+    pct_label = lv.label(gauge_obj)
+    pct_label.set_style_text_font(lv.font_ascii_bold_28, lv.PART.MAIN)
+    pct_label.set_style_text_color(lv.color_hex(color_hex), lv.PART.MAIN)
+    pct_label.set_text("0%")
+    pct_label.center()
+    
+    # Title label (bottom)
+    title_label = lv.label(gauge_obj)
+    title_label.set_style_text_font(lv.font_ascii_14, lv.PART.MAIN)
+    title_label.set_style_text_color(lv.color_hex(0xCCCCCC), lv.PART.MAIN)
+    title_label.set_text(label_text)
+    title_label.align(lv.ALIGN.BOTTOM_MID, 0, -2)
+    
+    # Store references for updating
+    gauge_obj._arc = arc
+    gauge_obj._pct_label = pct_label
+    
+    return gauge_obj
+
+
+def update_gauge(gauge_obj, value_pct):
+    """Update gauge arc and percentage"""
+    if not gauge_obj or not hasattr(gauge_obj, '_arc'):
+        return
+    
+    # Clamp to 0-100
+    value_pct = max(0, min(100, value_pct))
+    
+    # Update arc (0-100 maps to 0-360)
+    gauge_obj._arc.set_value(value_pct)
+    
+    # Update label
+    gauge_obj._pct_label.set_text(f"{int(value_pct)}%")
+
+
+def update_display():
+    """Update the display with current metrics"""
+    global current_page, label_page1, label_page2, label_page3, gauge_container
+    global lxc_running, lxc_total, vm_running, vm_total
+    global node_cpu_pct, node_mem_used_gb, node_mem_total_gb
+    global node_uptime_sec, node_netin_bytes, node_netout_bytes
+    
+    print(f"[DBG] update_display() page={current_page}")
+    
+    # Hide all pages first
+    if label_page1:
+        label_page1.add_flag(lv.obj.FLAG.HIDDEN)
+    if label_page2:
+        label_page2.add_flag(lv.obj.FLAG.HIDDEN)
+    if label_page3:
+        label_page3.add_flag(lv.obj.FLAG.HIDDEN)
+    if gauge_container:
+        gauge_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    # Show current page
+    if current_page == 0:
+        # Page 1: All data points (sanity test)
+        if not label_page1:
+            return
+        label_page1.clear_flag(lv.obj.FLAG.HIDDEN)
+        
+        text = "=== Page 1: All Data ===\n"
+        text += f"LXC: {lxc_running}/{lxc_total} running\n"
+        text += f"VMs: {vm_running}/{vm_total} running\n"
+        text += f"CPU: {node_cpu_pct:.1f}%\n"
+        text += f"RAM: {node_mem_used_gb:.1f}/"
+        text += f"{node_mem_total_gb:.1f} GB\n"
+        text += f"Uptime: {format_uptime(node_uptime_sec)}\n"
+        text += f"Net In: {node_netin_bytes / (1024**2):.1f} MB\n"
+        text += f"Net Out: {node_netout_bytes / (1024**2):.1f} MB"
+        
+        label_page1.set_text(text)
+        print(f"[DBG] Page 1 updated ({len(text)} chars)")
+        
+    elif current_page == 1:
+        # Page 2: Summary with formatted uptime
+        if not label_page2:
+            return
+        label_page2.clear_flag(lv.obj.FLAG.HIDDEN)
+        
+        text = "=== Page 2: Summary ===\n\n"
+        text += f"LXC Containers:\n"
+        text += f"  {lxc_running} of {lxc_total} running\n\n"
+        text += f"VMs:\n"
+        text += f"  {vm_running} of {vm_total} running\n\n"
+        text += f"Uptime: {format_uptime(node_uptime_sec)}"
+        
+        label_page2.set_text(text)
+        print(f"[DBG] Page 2 updated")
+        
+    elif current_page == 2:
+        # Page 3: Graphical gauges
+        if not gauge_container:
+            return
+        gauge_container.clear_flag(lv.obj.FLAG.HIDDEN)
+        
+        # Update gauge values
+        if gauge_cpu:
+            update_gauge(gauge_cpu, node_cpu_pct)
+        
+        if gauge_ram:
+            ram_pct = (node_mem_used_gb / max(node_mem_total_gb, 1)) * 100.0
+            update_gauge(gauge_ram, ram_pct)
+        
+        if gauge_netin:
+            # Scale network to 0-100 (assuming max 100 MB/s is "full")
+            netin_mb = node_netin_bytes / (1024**2)
+            netin_pct = min(100, (netin_mb / 100.0) * 100.0) if netin_mb > 0 else 0
+            update_gauge(gauge_netin, netin_pct)
+        
+        if gauge_netout:
+            netout_mb = node_netout_bytes / (1024**2)
+            netout_pct = min(100, (netout_mb / 100.0) * 100.0) if netout_mb > 0 else 0
+            update_gauge(gauge_netout, netout_pct)
+        
+        print(f"[DBG] Page 3 gauges updated")
+
+
+async def on_boot(apm):
+    """Store app manager reference"""
+    global app_mgr
+    app_mgr = apm
+    print("[DBG] on_boot() called")
+
+
+async def on_start():
+    """Initialize UI - test with LVGL arc widgets"""
+    global scr, label_page1, page1_container, page2_container, page3_container
+    
+    print("=== on_start() called ===")
+    
+    # Create screen
+    scr = lv.obj()
+    lv.scr_load(scr)
+    print("[DBG] Screen loaded")
+    
+    # PAGE 1 CONTAINER: Simple text
+    page1_container = lv.obj(scr)
+    page1_container.set_size(320, 240)
+    page1_container.set_pos(0, 0)
+    page1_container.set_style_bg_opa(lv.OPA._0, lv.PART.MAIN)
+    page1_container.set_style_border_width(0, lv.PART.MAIN)
+    
+    label_page1 = lv.label(page1_container)
+    label_page1.set_width(300)
+    label_page1.center()
+    label_page1.set_text("Page 1: Text\n\nPress LEFT/RIGHT\nto see widgets")
+    print("[DBG] Created page 1")
+    
+    # PAGE 2 CONTAINER: Single arc widget
+    page2_container = lv.obj(scr)
+    page2_container.set_size(320, 240)
+    page2_container.set_pos(0, 0)
+    page2_container.set_style_bg_opa(lv.OPA._0, lv.PART.MAIN)
+    page2_container.set_style_border_width(0, lv.PART.MAIN)
+    page2_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    p2_title = lv.label(page2_container)
+    p2_title.set_text("Page 2: Arc Widget")
+    p2_title.set_pos(10, 10)
+    
+    # Create arc (circular progress indicator)
+    arc = lv.arc(page2_container)
+    arc.set_size(150, 150)
+    arc.center()
+    arc.set_rotation(135)  # Start from bottom left
+    arc.set_bg_angles(0, 270)  # 270 degrees = 3/4 circle
+    arc.set_value(65)  # 65% CPU
+    arc.set_style_arc_color(lv.color_hex(0xFF6B6B), lv.PART.INDICATOR)
+    arc.set_style_arc_width(12, lv.PART.INDICATOR)
+    arc.set_style_arc_width(12, lv.PART.MAIN)
+    
+    # Label in center showing percentage
+    arc_label = lv.label(page2_container)
+    arc_label.set_text("65%\nCPU")
+    arc_label.center()
+    arc_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    print("[DBG] Created page 2")
+    
+    # PAGE 3 CONTAINER: Multiple arcs
+    page3_container = lv.obj(scr)
+    page3_container.set_size(320, 240)
+    page3_container.set_pos(0, 0)
+    page3_container.set_style_bg_opa(lv.OPA._0, lv.PART.MAIN)
+    page3_container.set_style_border_width(0, lv.PART.MAIN)
+    page3_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    p3_title = lv.label(page3_container)
+    p3_title.set_text("Page 3: Multi-Arc")
+    p3_title.set_pos(10, 10)
+    
+    # CPU arc (top left)
+    arc_cpu = lv.arc(page3_container)
+    arc_cpu.set_size(120, 120)
+    arc_cpu.set_pos(20, 50)
+    arc_cpu.set_rotation(135)
+    arc_cpu.set_bg_angles(0, 270)
+    arc_cpu.set_value(45)
+    arc_cpu.set_style_arc_color(lv.color_hex(0xFF6B6B), lv.PART.INDICATOR)
+    
+    cpu_label = lv.label(page3_container)
+    cpu_label.set_text("45%\nCPU")
+    cpu_label.set_pos(50, 90)
+    cpu_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    
+    # RAM arc (top right)
+    arc_ram = lv.arc(page3_container)
+    arc_ram.set_size(120, 120)
+    arc_ram.set_pos(180, 50)
+    arc_ram.set_rotation(135)
+    arc_ram.set_bg_angles(0, 270)
+    arc_ram.set_value(78)
+    arc_ram.set_style_arc_color(lv.color_hex(0x4ECDC4), lv.PART.INDICATOR)
+    
+    ram_label = lv.label(page3_container)
+    ram_label.set_text("78%\nRAM")
+    ram_label.set_pos(210, 90)
+    ram_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    print("[DBG] Created page 3")
+    
+    # PAGE 4 CONTAINER: Simple test
+    page4_container = lv.obj(scr)
+    page4_container.set_size(320, 240)
+    page4_container.set_pos(0, 0)
+    page4_container.set_style_bg_opa(lv.OPA._0, lv.PART.MAIN)
+    page4_container.set_style_border_width(0, lv.PART.MAIN)
+    page4_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    p4_label = lv.label(page4_container)
+    p4_label.set_text("Page 4:\n\nThis is a test!\n\nIf you see this,\ncontainer works.")
+    p4_label.set_width(300)
+    p4_label.center()
+    
+    print("[DBG] Created page 4")
+    
+    # Setup event handler
+    scr.add_event(event_handler, lv.EVENT.ALL, None)
+    
+    # Focus the screen for key events
+    lv.group_get_default().add_obj(scr)
+    lv.group_focus_obj(scr)
+    lv.group_get_default().set_editing(True)
+    
+    print("[DBG] on_start() complete")
+
+
+def event_handler(e):
+    """Handle encoder/button events"""
+    global current_page, page1_container, page2_container, page3_container
+    
+    e_code = e.get_code()
+    
+    if e_code == lv.EVENT.KEY:
+        e_key = e.get_key()
+        print(f"[KEY] {e_key} (LEFT={lv.KEY.LEFT} RIGHT={lv.KEY.RIGHT})")
+        
+        if e_key == lv.KEY.LEFT:
+            current_page = (current_page + 1) % 4
+            print(f"[DBG] Changed to page {current_page + 1}")
+            update_page_visibility()
+            
+        elif e_key == lv.KEY.RIGHT:
+            current_page = (current_page - 1) % 4
+            print(f"[DBG] Changed to page {current_page + 1}")
+            update_page_visibility()
+    
+    elif e_code == lv.EVENT.FOCUSED:
+        if not lv.group_get_default().get_editing():
+            lv.group_get_default().set_editing(True)
+
+
+def update_page_visibility():
+    """Hide all pages except current one"""
+    global current_page, page1_container, page2_container, page3_container, page4_container
+    
+    if page1_container:
+        if current_page == 0:
+            page1_container.clear_flag(lv.obj.FLAG.HIDDEN)
+        else:
+            page1_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    if page2_container:
+        if current_page == 1:
+            page2_container.clear_flag(lv.obj.FLAG.HIDDEN)
+        else:
+            page2_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    if page3_container:
+        if current_page == 2:
+            page3_container.clear_flag(lv.obj.FLAG.HIDDEN)
+        else:
+            page3_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    if page4_container:
+        if current_page == 3:
+            page4_container.clear_flag(lv.obj.FLAG.HIDDEN)
+        else:
+            page4_container.add_flag(lv.obj.FLAG.HIDDEN)
+    
+    print(f"[DBG] Showing page {current_page + 1}/4")
+
+
+async def on_running_foreground():
+    """Fetch metrics periodically"""
+    global last_fetch_time, lxc_running, lxc_total, vm_running, vm_total
+    global node_cpu_pct, node_mem_used_gb, node_mem_total_gb
+    global node_uptime_sec, node_netin_bytes, node_netout_bytes
+    global label_title
+    
+    now = utime.time()
+    
+    # Throttle to POLL_TIME seconds
+    if (now - last_fetch_time) < POLL_TIME:
+        return
+    
+    last_fetch_time = now
+    
+    # Validate config
+    if not API_SECRET or not API_TOKEN_ID:
+        print("[WARN] API credentials not configured")
+        if label_page1:
+            label_page1.set_text("ERROR:\nAPI credentials\nnot configured\n\nConfigure at:\nhttp://192.168.1.32/apps")
+        return
+    
+    print(f"[DBG] Fetching metrics at {now}...")
+    
+    try:
+        # Fetch VM/LXC data
+        url_vms = f"https://{PVE_HOST}/api2/json/cluster/resources?type=vm"
+        headers = {"Authorization": f"PVEAPIToken={API_TOKEN_ID}={API_SECRET}"}
+        
+        print(f"[DBG] Fetch URL: {url_vms}")
+        resp = requests.get(url_vms, headers=headers, timeout=8)
+        print(f"[DBG] Response status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = ujson.loads(resp.text)
+            vms = data.get("data", [])
+            
+            # Reset counters
+            lxc_r = 0
+            lxc_t = 0
+            vm_r = 0
+            vm_t = 0
+            
+            # Count VMs/LXCs for this node
+            for vm in vms:
+                if vm.get("node") != NODE_NAME:
+                    continue
+                
+                vm_type = vm.get("type", "")
+                status = vm.get("status", "")
+                
+                if vm_type == "lxc":
+                    lxc_t += 1
+                    if status == "running":
+                        lxc_r += 1
+                elif vm_type == "qemu":
+                    vm_t += 1
+                    if status == "running":
+                        vm_r += 1
+            
+            lxc_running = lxc_r
+            lxc_total = lxc_t
+            vm_running = vm_r
+            vm_total = vm_t
+            
+            print(f"[DBG] LXC: {lxc_running}/{lxc_total} | VM: {vm_running}/{vm_total}")
+        
+        resp.close()
+        
+        # Small delay before second request
+        utime.sleep_ms(100)
+        
+        # Fetch node metrics
+        url_nodes = f"https://{PVE_HOST}/api2/json/cluster/resources?type=node"
+        resp = requests.get(url_nodes, headers=headers, timeout=8)
+        
+        if resp.status_code == 200:
+            data = ujson.loads(resp.text)
+            nodes = data.get("data", [])
+            
+            for node in nodes:
+                if node.get("node") == NODE_NAME:
+                    # Extract metrics
+                    cpu = node.get("cpu", 0.0)
+                    node_cpu_pct = cpu * 100.0
+                    
+                    mem_used = node.get("mem", 0)
+                    mem_total = node.get("maxmem", 1)
+                    node_mem_used_gb = mem_used / (1024**3)
+                    node_mem_total_gb = mem_total / (1024**3)
+                    
+                    node_uptime_sec = node.get("uptime", 0)
+                    
+                    # Try to get network stats from cluster resources (may be 0)
+                    node_netin_bytes = node.get("netin", 0)
+                    node_netout_bytes = node.get("netout", 0)
+                    
+                    print(f"[DBG] Node: cpu={node_cpu_pct:.1f}% mem={node_mem_used_gb:.1f}/{node_mem_total_gb:.1f}GB")
+                    print(f"[DBG] Uptime: {format_uptime(node_uptime_sec)}")
+                    print(f"[DBG] Net from cluster: in={node_netin_bytes} out={node_netout_bytes}")
+                    
+                    # Try /nodes/{node}/status for more detailed network stats
+                    try:
+                        url_status = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/status"
+                        resp_status = requests.get(url_status, headers=headers, timeout=5)
+                        if resp_status.status_code == 200:
+                            status_data = ujson.loads(resp_status.text).get("data", {})
+                            # Check for network interface stats
+                            if "netin" in status_data:
+                                node_netin_bytes = status_data.get("netin", node_netin_bytes)
+                            if "netout" in status_data:
+                                node_netout_bytes = status_data.get("netout", node_netout_bytes)
+                            print(f"[DBG] Net from status: in={node_netin_bytes/(1024**2):.1f}MB out={node_netout_bytes/(1024**2):.1f}MB")
+                        resp_status.close()
+                    except Exception as e:
+                        print(f"[DBG] Status endpoint failed: {e} (using cluster values)")
+                    
+                    break
+        
+        resp.close()
+        
+        # Update display
+        update_display()
+        
+        # Success - set title green
+        if label_title:
+            label_title.set_style_text_color(lv.color_hex(0x00FF00), lv.PART.MAIN)
+        
+        print("[DBG] Fetch complete")
+        
+    except Exception as e:
+        print(f"[ERR] Fetch failed: {e}")
+        if label_page1:
+            label_page1.set_text(f"ERROR:\n{str(e)[:100]}\n\nRetrying in {POLL_TIME}s...")
+        if label_title:
+            label_title.set_style_text_color(lv.color_hex(0xFF0000), lv.PART.MAIN)
+
+
+async def on_stop():
+    """Cleanup on app exit"""
+    global scr, label_title, label_page1, label_page2, label_page3, gauge_container
+    global gauge_cpu, gauge_ram, gauge_netin, gauge_netout
+    print("[DBG] on_stop() called")
+    
+    if scr:
+        scr.clean()
+        scr.del_async()
+        scr = None
+    
+    label_title = None
+    label_page1 = None
+    label_page2 = None
+    label_page3 = None
+    gauge_container = None
+    gauge_cpu = None
+    gauge_ram = None
+    gauge_netin = None
+    gauge_netout = None
