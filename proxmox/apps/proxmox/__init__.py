@@ -5,7 +5,7 @@ import ujson
 import utime
 
 NAME = "Proxmox"
-VERSION = "0.0.6"
+VERSION = "0.0.7"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
 
@@ -227,29 +227,81 @@ def show_main_page():
     container_style.set_bg_color(lv.color_hex(0x2D2D2D))
     container_style.set_radius(10)
     
-    # TOP LEFT - CPU with text only (arcs break)
+    # TOP LEFT - CPU with arc gauge
     tl = lv.obj(_scr)
     tl.set_size(155, 115)
     tl.align(lv.ALIGN.TOP_LEFT, 2, 2)
     tl.add_style(container_style, lv.PART.MAIN)
     
-    cpu_label = lv.label(tl)
-    cpu_label.set_text(f"{_metrics['cpu']}%\nCPU\n\n72")
-    cpu_label.center()
-    cpu_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
-    cpu_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
+    # Arc gauge
+    cpu_arc = lv.arc(tl)
+    cpu_arc.set_size(90, 90)
+    cpu_arc.center()
+    cpu_arc.set_range(0, 100)
+    cpu_arc.set_value(int(_metrics['cpu']))
+    cpu_arc.set_bg_angles(0, 360)
+    cpu_arc.set_rotation(270)
+    cpu_arc.set_style_arc_width(8, lv.PART.MAIN)
+    cpu_arc.set_style_arc_width(8, lv.PART.INDICATOR)
+    cpu_arc.set_style_arc_color(lv.color_hex(0x404040), lv.PART.MAIN)
+    cpu_arc.set_style_arc_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
+    cpu_arc.set_style_bg_opa(0, lv.PART.KNOB)  # Hide knob
+    cpu_arc.set_style_pad_all(0, lv.PART.KNOB)
+    cpu_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
-    # TOP RIGHT - RAM with text only (arcs break)
+    # Center labels
+    cpu_pct_label = lv.label(tl)
+    cpu_pct_label.set_text(f"{_metrics['cpu']}%")
+    cpu_pct_label.align(lv.ALIGN.CENTER, 0, -8)
+    cpu_pct_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
+    
+    cpu_text_label = lv.label(tl)
+    cpu_text_label.set_text("CPU")
+    cpu_text_label.align(lv.ALIGN.CENTER, 0, 10)
+    cpu_text_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
+    
+    cpu_count_label = lv.label(tl)
+    cpu_count_label.set_text("72")
+    cpu_count_label.align(lv.ALIGN.BOTTOM_MID, 0, -5)
+    cpu_count_label.set_style_text_color(lv.color_hex(0x808080), 0)
+    
+    # TOP RIGHT - RAM with arc gauge
     tr = lv.obj(_scr)
     tr.set_size(155, 115)
     tr.align(lv.ALIGN.TOP_RIGHT, -2, 2)
     tr.add_style(container_style, lv.PART.MAIN)
     
-    ram_label = lv.label(tr)
-    ram_label.set_text(f"{_metrics['mem_pct']}%\nRAM\n\n{_metrics['mem_used']}/{_metrics['mem_total']}GB")
-    ram_label.center()
-    ram_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
-    ram_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
+    # Arc gauge
+    ram_arc = lv.arc(tr)
+    ram_arc.set_size(90, 90)
+    ram_arc.center()
+    ram_arc.set_range(0, 100)
+    ram_arc.set_value(int(_metrics['mem_pct']))
+    ram_arc.set_bg_angles(0, 360)
+    ram_arc.set_rotation(270)
+    ram_arc.set_style_arc_width(8, lv.PART.MAIN)
+    ram_arc.set_style_arc_width(8, lv.PART.INDICATOR)
+    ram_arc.set_style_arc_color(lv.color_hex(0x404040), lv.PART.MAIN)
+    ram_arc.set_style_arc_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
+    ram_arc.set_style_bg_opa(0, lv.PART.KNOB)  # Hide knob
+    ram_arc.set_style_pad_all(0, lv.PART.KNOB)
+    ram_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
+    
+    # Center labels
+    ram_pct_label = lv.label(tr)
+    ram_pct_label.set_text(f"{_metrics['mem_pct']}%")
+    ram_pct_label.align(lv.ALIGN.CENTER, 0, -8)
+    ram_pct_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
+    
+    ram_text_label = lv.label(tr)
+    ram_text_label.set_text("RAM")
+    ram_text_label.align(lv.ALIGN.CENTER, 0, 10)
+    ram_text_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
+    
+    ram_detail_label = lv.label(tr)
+    ram_detail_label.set_text(f"{_metrics['mem_used']}/{_metrics['mem_total']}GB")
+    ram_detail_label.align(lv.ALIGN.BOTTOM_MID, 0, -5)
+    ram_detail_label.set_style_text_color(lv.color_hex(0x808080), 0)
     
     # BOTTOM LEFT - Network with bars
     bl = lv.obj(_scr)
