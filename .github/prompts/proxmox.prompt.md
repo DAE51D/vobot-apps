@@ -265,6 +265,8 @@ Use the standard Vobot settings method to configure these variables
 
 ### Proxmox API Examples (bash)
 
+https://www.perplexity.ai/search/i-have-a-https-proxmox-home-la-KZwXOdvbQY.eVlWPKbDxmA#12
+
 ```bash
 export PVE_HOST='proxmox.home.lan:8006'
 export API_TOKEN_ID='api@pam!homepage'
@@ -328,6 +330,74 @@ curl -k `
 ```
 
 The `.cpu` field is a fraction of total (for example 0.12 means about 12% usage), which is how the Proxmox API exposes CPU utilization.
+
+#### Network Traffic
+
+```powershell
+curl -k -H "Authorization: PVEAPIToken=$($env:API_TOKEN_ID)=$($env:API_SECRET)" "https://$($env:PVE_HOST)/api2/json/nodes/$($env:NODE_NAME)/rrddata?timeframe=hour" | ConvertFrom-Json | Select-Object -ExpandProperty data | Select-Object -First 3 | ConvertTo-Json -Depth 3
+```
+yields an array of these objects... use `netin` (This is INcoming = DOWNload) and `netout` (This is OUTgoing = UPload)
+```json
+[
+    {
+    "pressureiosome": 1.115,
+    "pressurecpusome": 0.0666666666666667,
+    "netout": 35853.7333333333,
+    "pressureiofull": 1.11333333333333,
+    "time": 1766014200,
+    "pressurememorysome": 0,
+    "loadavg": 3.44,
+    "arcsize": 17280,
+    "netin": 95589.45,
+    "swaptotal": 8589930496,
+    "memtotal": 135038619648,
+    "cpu": 0.0277346455515237,
+    "rootused": 30622670848,
+    "maxcpu": 72,
+    "swapused": 2550175061.33333,
+    "memused": 57576897877.3333,
+    "memavailable": 77461721770.6667,
+    "pressurememoryfull": 0,
+    "iowait": 0.000922842288903207,
+    "roottotal": 100861726720
+  }
+]
+```
+
+```powershell
+curl -k `
+  -H "Authorization: PVEAPIToken=$($env:API_TOKEN_ID)=$($env:API_SECRET)" `
+  "https://$($env:PVE_HOST)/api2/json/nodes/$($env:NODE_NAME)/rrddata?timeframe=hour" |
+  ConvertFrom-Json |
+  Select-Object -ExpandProperty data |
+  Select-Object -First 1 -Property netin, netout
+```
+yeilds
+```
+    netin   netout
+    -----   ------
+106151.08 30824.88
+```
+
+Or for the raw numbers only
+```powershell
+$point = curl -k `
+  -H "Authorization: PVEAPIToken=$($env:API_TOKEN_ID)=$($env:API_SECRET)" `
+  "https://$($env:PVE_HOST)/api2/json/nodes/$($env:NODE_NAME)/rrddata?timeframe=hour" |
+  ConvertFrom-Json |
+  Select-Object -ExpandProperty data |
+  Select-Object -First 1
+
+$point.netin
+$point.netout
+```
+yields
+```
+PS D:\daevid\Code\Vobot> $point.netin
+100643.65
+PS D:\daevid\Code\Vobot> $point.netout
+42314.3833333333
+```
 
 ## Deployment (ampy on Windows)
 

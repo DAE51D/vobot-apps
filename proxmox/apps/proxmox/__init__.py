@@ -36,16 +36,12 @@ _metrics = {
 }
 
 # UI widgets (stored for updates)
-_cpu_slider = None
 _cpu_label = None
-_mem_slider = None
-_mem_label = None
-_net_in_slider = None
-_net_in_label = None
-_net_out_slider = None
-_net_out_label = None
 _vm_label = None
+_mem_label = None
 _lxc_label = None
+_net_in_label = None
+_net_out_label = None
 
 def get_settings_json():
     return {
@@ -102,11 +98,25 @@ async def fetch_proxmox_data():
         if resp.status_code == 200:
             data = resp.json()['data']
             _metrics['cpu'] = int(data.get('cpu', 0) * 100)
-            _metrics['mem_pct'] = int((data.get('memory', {}).get('used', 0) / data.get('memory', {}).get('total', 1)) * 100)
-            _metrics['mem_used'] = data.get('memory', {}).get('used', 0) // (1024**3)  # GB
-            _metrics['mem_total'] = data.get('memory', {}).get('total', 1) // (1024**3)  # GB
-            _metrics['netin'] = data.get('netin', 0) // (1024**2)  # MB/s
-            _metrics['netout'] = data.get('netout', 0) // (1024**2)  # MB/s
+            
+            mem_data = data.get('memory', {})
+            mem_used = mem_data.get('used', 0)
+            mem_total = mem_data.get('total', 1)
+            _metrics['mem_pct'] = int((mem_used / mem_total) * 100)
+            _metrics['mem_used'] = mem_used // (1024**3)  # GB
+            _metrics['mem_total'] = mem_total // (1024**3)  # GB
+        resp.close()
+        
+        # Get network stats from RRD data (most recent data point)
+        url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/rrddata?timeframe=hour"
+        resp = requests.get(url, headers=headers)
+        if resp.status_code == 200:
+            rrd_data = resp.json()['data']
+            if rrd_data:
+                latest = rrd_data[0]  # Most recent data point
+                # netin/netout are in bytes/sec, convert to KB/s
+                _metrics['netin'] = float(latest.get('netin', 0)) / 1024
+                _metrics['netout'] = float(latest.get('netout', 0)) / 1024
         resp.close()
         
         # Get VM count
@@ -134,36 +144,18 @@ async def fetch_proxmox_data():
 
 def update_ui_values():
     """Update UI widgets with current metrics"""
-    if _cpu_slider:
-        _cpu_slider.set_value(_metrics['cpu'], lv.ANIM.OFF)
     if _cpu_label:
-        _cpu_label.set_text(f"{_metrics['cpu']}%")
-    
-    if _mem_slider:
-        _mem_slider.set_value(_metrics['mem_pct'], lv.ANIM.OFF)
-    if _mem_label:
-        _mem_label.set_text(f"{_metrics['mem_used']}/{_metrics['mem_total']}GB")
-    
-    if _net_in_slider:
-        _net_in_slider.set_value(min(_metrics['netin'], 100), lv.ANIM.OFF)
-    if _net_in_label:
-        _net_in_label.set_text(f"{_metrics['netin']}MB/s")
-    
-    if _net_out_slider:
-        _net_out_slider.set_value(min(_metrics['netout'], 100), lv.ANIM.OFF)
-    if _net_out_label:
-        _net_out_label.set_text(f"{_metrics['netout']}MB/s")
-    
+        _cpu_label.set_text(f"CPU\n\n{_metrics['cpu']}%")
     if _vm_label:
-        _vm_label.set_text(f"VM: {_metrics['vm_running']}/{_metrics['vm_total']}")
-    if _lxc_label:
-        _lxc_label.set_text(f"LXC: {_metrics['lxc_running']}/{_metrics['lxc_total']}")
+        _vm_label.set_text(f"VM\n\n{_metrics['vm_running']}/{_metrics['vm_total']}")
+    if _mem_label:
+        _mem_label.set_text(f"RAM {_metrics['mem_pct']}%\n{_metrics['mem_used']}/{_metrics['mem_total']}GB\n\nLXC\n{_metrics['lxc_running']}/{_metrics['lxc_total']}")
+    if _net_in_label:
+        _net_in_label.set_text(f"Network\n\nUp: {_metrics['netout']:.0f} KB/s\n\nDn: {_metrics['netin']:.0f} KB/s")
 
 async def show_ui():
     """Display the dashboard UI"""
-    global _cpu_slider, _cpu_label, _mem_slider, _mem_label
-    global _net_in_slider, _net_in_label, _net_out_slider, _net_out_label
-    global _vm_label, _lxc_label
+    global _cpu_label, _vm_label, _mem_label, _lxc_label, _net_in_label, _net_out_label
     
     if not _scr: 
         return
@@ -172,102 +164,70 @@ async def show_ui():
     _scr.clean()
     lv.group_get_default().set_editing(False)
     
-    # Create container style  
+    # Check if configured
+    if not API_SECRET:
+        error_label = lv.label(_scr)
+        error_label.set_text("Not Configured\n\nPlease configure\nProxmox settings at:\n\nhttp://192.168.1.32/apps")
+        error_label.center()
+        error_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+        error_label.set_style_text_color(lv.color_hex(0xFF6B6B), 0)
+        return
+    
+    # Container style  
     container_style = lv.style_t()
     container_style.init()
-    container_style.set_pad_all(0)
+    container_style.set_pad_all(8)
     container_style.set_border_width(0)
-    container_style.set_bg_color(lv.color_hex3(0x000))
+    container_style.set_bg_color(lv.color_hex(0x2D2D2D))
+    container_style.set_radius(10)
     
-    # CPU container
-    cpu_container = lv.obj(_scr)
-    cpu_container.set_size(_SCR_WIDTH, 35)
-    cpu_container.align(lv.ALIGN.TOP_LEFT, 0, 5)
-    cpu_container.add_style(container_style, lv.PART.MAIN)
+    # TOP LEFT - CPU
+    tl = lv.obj(_scr)
+    tl.set_size(155, 115)
+    tl.align(lv.ALIGN.TOP_LEFT, 2, 2)
+    tl.add_style(container_style, lv.PART.MAIN)
     
-    cpu_title = lv.label(cpu_container)
-    cpu_title.set_text("CPU")
-    cpu_title.align(lv.ALIGN.LEFT_MID, 5, 0)
+    _cpu_label = lv.label(tl)
+    _cpu_label.set_text(f"CPU\n\n{_metrics['cpu']}%")
+    _cpu_label.center()
+    _cpu_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    _cpu_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
     
-    _cpu_slider = lv.slider(cpu_container)
-    _cpu_slider.set_size(160, 8)
-    _cpu_slider.align(lv.ALIGN.CENTER, 0, 0)
-    _cpu_slider.set_value(_metrics['cpu'], lv.ANIM.OFF)
+    # TOP RIGHT - VM
+    tr = lv.obj(_scr)
+    tr.set_size(155, 115)
+    tr.align(lv.ALIGN.TOP_RIGHT, -2, 2)
+    tr.add_style(container_style, lv.PART.MAIN)
     
-    _cpu_label = lv.label(cpu_container)
-    _cpu_label.set_text(f"{_metrics['cpu']}%")
-    _cpu_label.align(lv.ALIGN.RIGHT_MID, -5, 0)
+    _vm_label = lv.label(tr)
+    _vm_label.set_text(f"VM\n\n{_metrics['vm_running']}/{_metrics['vm_total']}")
+    _vm_label.center()
+    _vm_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    _vm_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
     
-    # Memory container
-    mem_container = lv.obj(_scr)
-    mem_container.set_size(_SCR_WIDTH, 35)
-    mem_container.align_to(cpu_container, lv.ALIGN.OUT_BOTTOM_LEFT, 0, 0)
-    mem_container.add_style(container_style, lv.PART.MAIN)
+    # BOTTOM LEFT - Memory + LXC
+    bl = lv.obj(_scr)
+    bl.set_size(155, 118)
+    bl.align(lv.ALIGN.BOTTOM_LEFT, 2, -2)
+    bl.add_style(container_style, lv.PART.MAIN)
     
-    mem_title = lv.label(mem_container)
-    mem_title.set_text("RAM")
-    mem_title.align(lv.ALIGN.LEFT_MID, 5, 0)
+    _mem_label = lv.label(bl)
+    _mem_label.set_text(f"RAM {_metrics['mem_pct']}%\n{_metrics['mem_used']}/{_metrics['mem_total']}GB\n\nLXC\n{_metrics['lxc_running']}/{_metrics['lxc_total']}")
+    _mem_label.center()
+    _mem_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    _mem_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
     
-    _mem_slider = lv.slider(mem_container)
-    _mem_slider.set_size(160, 8)
-    _mem_slider.align(lv.ALIGN.CENTER, 0, 0)
-    _mem_slider.set_value(_metrics['mem_pct'], lv.ANIM.OFF)
+    # BOTTOM RIGHT - Network
+    br = lv.obj(_scr)
+    br.set_size(155, 118)
+    br.align(lv.ALIGN.BOTTOM_RIGHT, -2, -2)
+    br.add_style(container_style, lv.PART.MAIN)
     
-    _mem_label = lv.label(mem_container)
-    _mem_label.set_text(f"{_metrics['mem_used']}/{_metrics['mem_total']}GB")
-    _mem_label.align(lv.ALIGN.RIGHT_MID, -5, 0)
-    
-    # Network In container
-    netin_container = lv.obj(_scr)
-    netin_container.set_size(_SCR_WIDTH, 35)
-    netin_container.align_to(mem_container, lv.ALIGN.OUT_BOTTOM_LEFT, 0, 0)
-    netin_container.add_style(container_style, lv.PART.MAIN)
-    
-    netin_title = lv.label(netin_container)
-    netin_title.set_text("IN")
-    netin_title.align(lv.ALIGN.LEFT_MID, 5, 0)
-    
-    _net_in_slider = lv.slider(netin_container)
-    _net_in_slider.set_size(160, 8)
-    _net_in_slider.align(lv.ALIGN.CENTER, 0, 0)
-    _net_in_slider.set_value(min(_metrics['netin'], 100), lv.ANIM.OFF)
-    
-    _net_in_label = lv.label(netin_container)
-    _net_in_label.set_text(f"{_metrics['netin']}MB/s")
-    _net_in_label.align(lv.ALIGN.RIGHT_MID, -5, 0)
-    
-    # Network Out container
-    netout_container = lv.obj(_scr)
-    netout_container.set_size(_SCR_WIDTH, 35)
-    netout_container.align_to(netin_container, lv.ALIGN.OUT_BOTTOM_LEFT, 0, 0)
-    netout_container.add_style(container_style, lv.PART.MAIN)
-    
-    netout_title = lv.label(netout_container)
-    netout_title.set_text("OUT")
-    netout_title.align(lv.ALIGN.LEFT_MID, 5, 0)
-    
-    _net_out_slider = lv.slider(netout_container)
-    _net_out_slider.set_size(160, 8)
-    _net_out_slider.align(lv.ALIGN.CENTER, 0, 0)
-    _net_out_slider.set_value(min(_metrics['netout'], 100), lv.ANIM.OFF)
-    
-    _net_out_label = lv.label(netout_container)
-    _net_out_label.set_text(f"{_metrics['netout']}MB/s")
-    _net_out_label.align(lv.ALIGN.RIGHT_MID, -5, 0)
-    
-    # VM/LXC summary at bottom
-    summary_container = lv.obj(_scr)
-    summary_container.set_size(_SCR_WIDTH, 50)
-    summary_container.align_to(netout_container, lv.ALIGN.OUT_BOTTOM_LEFT, 0, 5)
-    summary_container.add_style(container_style, lv.PART.MAIN)
-    
-    _vm_label = lv.label(summary_container)
-    _vm_label.set_text(f"VM: {_metrics['vm_running']}/{_metrics['vm_total']}")
-    _vm_label.align(lv.ALIGN.LEFT_MID, 40, 0)
-    
-    _lxc_label = lv.label(summary_container)
-    _lxc_label.set_text(f"LXC: {_metrics['lxc_running']}/{_metrics['lxc_total']}")
-    _lxc_label.align(lv.ALIGN.RIGHT_MID, -40, 0)
+    _net_in_label = lv.label(br)
+    _net_in_label.set_text(f"Network\n\nUp: {_metrics['netout']:.0f} KB/s\n\nDn: {_metrics['netin']:.0f} KB/s")
+    _net_in_label.center()
+    _net_in_label.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    _net_in_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
 
 async def on_boot(apm):
     """App lifecycle: Called when app first loaded"""
