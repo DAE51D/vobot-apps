@@ -95,6 +95,8 @@ When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/p
 - [Vobot Developer Docs](https://dock.myvobot.com/developer/)
 - [Official Vobot Apps](https://github.com/myvobot/dock-mini-apps)
 - [LVGL widgets](https://docs.lvgl.io/master/widgets/index.html)
+- [Proxmox Forum Post](https://forum.proxmox.com/threads/proxmox-app-for-vobot-mini-dock-device.178138/)
+- [Vobot Forum Post](https://discuss.myvobot.com/t/proxmox-h-w-monitor/389)
 
 ## Authentication
 
