@@ -1,17 +1,17 @@
 # proxmox App for Vobot Mini Dock
 
-A MicroPython notification viewer for self-hosted proxmox servers.
+A MicroPython Proxmox dashboard (CPU, RAM, network, VM/LXC counts) for the Vobot Mini Dock.
 
 ## Overview
 
-Displays LXC and VM count as well as hardware statistics from an proxmox server on your Vobot Mini Dock. 
-Navigate through screens with the rotary wheel.
+Displays CPU/RAM gauges, network throughput, and VM/LXC counts from a Proxmox node. Two pages: main dashboard with arcs/bars and a debug text page. Navigate with the rotary wheel.
 
 ## Features
 
-- Real-time notification display
-- Navigate screens with rotary encoder
-- Automatic fetching (every 10 seconds)
+- Two-page UI: arc/bars dashboard plus text debug page
+- CPU/RAM arcs, network in/out bars with arrows, VM/LXC bars
+- Rotary encoder navigation (LEFT/RIGHT to switch pages)
+- Polls Proxmox every 10 seconds, shows swap/disk/uptime on debug page
 
 ## Screenshots
 
@@ -85,10 +85,10 @@ When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/p
 
 - **Version:** 0.0.8
 - **Platform:** ESP32-S3 (MicroPython)
-- **UI Framework:** LVGL 8.x
+- **UI Framework:** LVGL 8.x (arcs/bars/labels; png arrows via `lv.img`)
 - **Dependencies:** urequests, ujson, utime
-- **Default mode:** Long-poll (real-time, stable)
-- **Message cache:** Last `MAX_MESSAGES` messages (default 5, 24-hour window)
+- **Data:** Proxmox status and RRD endpoints (CPU, mem/swap/disk, net KB/s, VM/LXC counts)
+- **Polling:** 10 seconds
 
 ## Resources
 

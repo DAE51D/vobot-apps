@@ -317,6 +317,14 @@ print(f"Message time: {local_time[3]}:{local_time[4]:02d}")
 4. **Resource Optimization**: Minimize memory usage, compress images
 5. **Testing**: Test app in Thonny before deploying to device
 
+### LVGL/Vobot learnings (Proxmox app)
+- Encoder handling: attach event handler with `lv.EVENT.ALL`, add screen to default group, call `lv.group_focus_obj(scr)`, and set editing `True`; otherwise the wheel does nothing.
+- Arcs: set rotation to 270, set bg angles to 0–360, hide knob with `set_style_bg_opa(0, lv.PART.KNOB)` and `set_style_pad_all(0, lv.PART.KNOB)`, use matching arc widths on main/indicator for consistent rings.
+- Images: use `lv.img` for PNG assets (arrows/icons); `lv.image` will black-screen on the device.
+- Layout: center arc labels with small y offsets (e.g., y=18 and y=36) and place detail labels near the bottom for readability.
+- Page switching: rebuilding the page on change is safer than caching widgets if performance allows; avoid `_scr.clean()` on every dial tick—only rebuild when the page actually changes.
+- Uploads: on constrained flash, prefer single-file uploads (e.g., only `__init__.py`) when space is tight; Thonny file view is the most reliable fallback.
+
 ## Debugging Workflow
 
 ### Real-Time Log Monitoring

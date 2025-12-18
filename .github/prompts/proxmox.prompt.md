@@ -1,7 +1,7 @@
 ---
 agent: 'agent'
 tools: ['search','edit', 'web', 'read','github/*']
-description: 'Implement Proxmox client for Vobot Mini Dock'
+description: 'Implement Proxmox dashboard for Vobot Mini Dock'
 ---
 
 # Role and Context
@@ -24,7 +24,7 @@ See credentials in the API examples below
 - Limited memory: Keep data structures minimal
 - Async operations via `async/await`
 
-# Task: Build proxmox Notification Viewer App
+# Task: Build proxmox Dashboard App
 
 ## Objectives
 
@@ -63,11 +63,13 @@ Page 2:
 
 ## Functional Requirements
 
-### Message Fetching
-- Poll for messages periodically (e.g., every 30 seconds) in background
-- Parse response and extract statistic data
-- update display graphs and values
-- Handle network errors gracefully
+### Metrics Fetching
+- Poll Proxmox every ~10 seconds
+- Endpoints:
+  - `/nodes/{node}/status` for cpu/mem/swap/disk/uptime
+  - `/nodes/{node}/rrddata?timeframe=hour` for `netin`/`netout` (use latest point; display KB/s)
+  - `/nodes/{node}/qemu` and `/nodes/{node}/lxc` to count running/total
+- Handle network errors gracefully and keep last good data
 
 ### Navigation
 - **Scroll up** (encoder counter-clockwise, `lv.KEY.RIGHT`): Previous screen (circular)
@@ -77,70 +79,38 @@ Page 2:
 
 ## Technical Implementation Details
 
-### HTTP Request Pattern
+### HTTP Request Pattern (token auth)
 ```python
 import urequests as requests
 
-try:
-    # Poll for recent messages
-    url = "http://proxmox.home.lan/general/json?poll=1&since=10m"
-    response = requests.get(url)
-    
-    # Parse response line by line (JSONL format)
-    for line in response.text.strip().split('\n'):
-        if line:
-            msg = ujson.loads(line)
-            if msg.get('event') == 'message':
-                # Process message
-                messages.append({
-                    'id': msg.get('id'),
-                    'title': msg.get('title', 'proxmox'),
-                    'message': msg.get('message', ''),
-                    'time': msg.get('time'),
-                    'priority': msg.get('priority', 3),
-                    'tags': msg.get('tags', [])
-                })
-    
-    response.close()
-except Exception as e:
-    print(f"Error fetching messages: {e}")
+headers = {"Authorization": f"PVEAPIToken={API_TOKEN_ID}={API_SECRET}"}
+resp = requests.get(f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/status", headers=headers)
+data = resp.json().get("data", {})
+resp.close()
+# Repeat for rrddata/qemu/lxc; cache last-good metrics
 ```
 
-### UI Update Pattern
+### UI Update Pattern (arcs/bars)
 ```python
-def update_display():
-    """Update UI with current message"""
-    if not messages:
-        label_counter.set_text("0/0")
-        label_title.set_text("No messages")
-        label_message.set_text("Waiting for notifications...")
-        return
-    
-    msg = messages[current_index]
-    label_counter.set_text(f"{current_index + 1}/{len(messages)}")
-    label_title.set_text(msg.get('title', 'proxmox'))
-    label_message.set_text(msg.get('message', ''))
+cpu_arc.set_value(int(metrics['cpu']))
+cpu_pct_label.set_text(f"{metrics['cpu']}%")
+ram_arc.set_value(int(metrics['mem_pct']))
+ram_detail_label.set_text(f"{metrics['mem_used']}/{metrics['mem_total']}GB")
+net_in_bar.set_value(min(100, int(metrics['netin']/10)))
+net_in_label.set_text(f"Dn: {metrics['netin']:.0f} KB/s")
 ```
 
 ### Event Handler Pattern
 ```python
 def event_handler(e):
-    global current_index
-    e_key = e.get_key()
-    
-    if e_key == lv.KEY.RIGHT:  # Scroll up = previous message
-        if current_index > 0:
-            current_index -= 1
-            update_display()
-    
-    elif e_key == lv.KEY.LEFT:  # Scroll down = next message
-        if current_index < len(messages) - 1:
-            current_index += 1
-            update_display()
-    
-    elif e_key == lv.KEY.ENTER:  # Refresh
-        fetch_messages()
-        update_display()
+  global current_page
+  e_key = e.get_key()
+  if e_key == lv.KEY.LEFT:
+    current_page = (current_page + 1) % 2
+    show_current_page()
+  elif e_key == lv.KEY.RIGHT:
+    current_page = (current_page - 1) % 2
+    show_current_page()
 ```
 
 ## Debug
@@ -202,7 +172,7 @@ Use the standard Vobot settings method to configure these variables
 - NODE_NAME - "pve"
 - API_TOKEN_ID - "user@realm!tokenname"
 - API_SECRET - "UUID"
-- POLL_TIME - how many seconds between polling for updates (10 )
+- POLL_TIME - polling interval seconds (default 10)
 
 ## Implementation Steps
 
