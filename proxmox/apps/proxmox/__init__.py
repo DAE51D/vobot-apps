@@ -5,7 +5,7 @@ import ujson
 import utime
 
 NAME = "Proxmox"
-VERSION = "0.0.7"
+VERSION = "0.0.9"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
 
@@ -104,22 +104,22 @@ async def fetch_proxmox_data():
             mem_used = mem_data.get('used', 0)
             mem_total = mem_data.get('total', 1)
             _metrics['mem_pct'] = int((mem_used / mem_total) * 100)
-            _metrics['mem_used'] = mem_used // (1024**3)  # GB
-            _metrics['mem_total'] = mem_total // (1024**3)  # GB
+            _metrics['mem_used'] = int(mem_used / (1024**3) + 0.5)  # GB rounded
+            _metrics['mem_total'] = int(mem_total / (1024**3) + 0.99)  # GB rounded up
             
             swap_data = data.get('swap', {})
             swap_used = swap_data.get('used', 0)
             swap_total = swap_data.get('total', 1)
             _metrics['swap_pct'] = int((swap_used / swap_total) * 100) if swap_total > 0 else 0
-            _metrics['swap_used'] = swap_used // (1024**3)  # GB
-            _metrics['swap_total'] = swap_total // (1024**3)  # GB
+            _metrics['swap_used'] = round(swap_used / (1024**3))  # GB rounded
+            _metrics['swap_total'] = round(swap_total / (1024**3))  # GB rounded
             
             disk_data = data.get('rootfs', {})
             disk_used = disk_data.get('used', 0)
             disk_total = disk_data.get('total', 1)
             _metrics['disk_pct'] = int((disk_used / disk_total) * 100)
-            _metrics['disk_used'] = disk_used // (1024**3)  # GB
-            _metrics['disk_total'] = disk_total // (1024**3)  # GB
+            _metrics['disk_used'] = round(disk_used / (1024**3))  # GB rounded
+            _metrics['disk_total'] = round(disk_total / (1024**3))  # GB rounded
         resp.close()
         
         # Get network stats from RRD data (most recent data point)
@@ -164,11 +164,14 @@ def event_handler(e):
     
     if e_code == lv.EVENT.KEY:
         e_key = e.get_key()
+        old_page = _current_page
         if e_key == lv.KEY.LEFT:  # Scroll down = next page
             _current_page = (_current_page + 1) % 2
-            show_current_page()
         elif e_key == lv.KEY.RIGHT:  # Scroll up = previous page
             _current_page = (_current_page - 1) % 2
+        
+        # Only redraw if page actually changed
+        if _current_page != old_page:
             show_current_page()
 
 def show_current_page():
@@ -233,36 +236,36 @@ def show_main_page():
     tl.align(lv.ALIGN.TOP_LEFT, 2, 2)
     tl.add_style(container_style, lv.PART.MAIN)
     
-    # Arc gauge
+    # Arc gauge - smaller and positioned at top
     cpu_arc = lv.arc(tl)
-    cpu_arc.set_size(90, 90)
-    cpu_arc.center()
+    cpu_arc.set_size(75, 75)
+    cpu_arc.align(lv.ALIGN.TOP_MID, 0, 3)
     cpu_arc.set_range(0, 100)
     cpu_arc.set_value(int(_metrics['cpu']))
     cpu_arc.set_bg_angles(0, 360)
     cpu_arc.set_rotation(270)
-    cpu_arc.set_style_arc_width(8, lv.PART.MAIN)
-    cpu_arc.set_style_arc_width(8, lv.PART.INDICATOR)
+    cpu_arc.set_style_arc_width(7, lv.PART.MAIN)
+    cpu_arc.set_style_arc_width(7, lv.PART.INDICATOR)
     cpu_arc.set_style_arc_color(lv.color_hex(0x404040), lv.PART.MAIN)
     cpu_arc.set_style_arc_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
     cpu_arc.set_style_bg_opa(0, lv.PART.KNOB)  # Hide knob
     cpu_arc.set_style_pad_all(0, lv.PART.KNOB)
     cpu_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
-    # Center labels
+    # Center labels (positioned in arc)
     cpu_pct_label = lv.label(tl)
     cpu_pct_label.set_text(f"{_metrics['cpu']}%")
-    cpu_pct_label.align(lv.ALIGN.CENTER, 0, -8)
+    cpu_pct_label.align(lv.ALIGN.TOP_MID, 0, 31)
     cpu_pct_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
     
     cpu_text_label = lv.label(tl)
     cpu_text_label.set_text("CPU")
-    cpu_text_label.align(lv.ALIGN.CENTER, 0, 10)
+    cpu_text_label.align(lv.ALIGN.TOP_MID, 0, 49)
     cpu_text_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
     
     cpu_count_label = lv.label(tl)
-    cpu_count_label.set_text("72")
-    cpu_count_label.align(lv.ALIGN.BOTTOM_MID, 0, -5)
+    cpu_count_label.set_text("72 Cores")
+    cpu_count_label.align(lv.ALIGN.BOTTOM_MID, 0, 1)
     cpu_count_label.set_style_text_color(lv.color_hex(0x808080), 0)
     
     # TOP RIGHT - RAM with arc gauge
@@ -271,36 +274,36 @@ def show_main_page():
     tr.align(lv.ALIGN.TOP_RIGHT, -2, 2)
     tr.add_style(container_style, lv.PART.MAIN)
     
-    # Arc gauge
+    # Arc gauge - smaller and positioned at top
     ram_arc = lv.arc(tr)
-    ram_arc.set_size(90, 90)
-    ram_arc.center()
+    ram_arc.set_size(75, 75)
+    ram_arc.align(lv.ALIGN.TOP_MID, 0, 3)
     ram_arc.set_range(0, 100)
     ram_arc.set_value(int(_metrics['mem_pct']))
     ram_arc.set_bg_angles(0, 360)
     ram_arc.set_rotation(270)
-    ram_arc.set_style_arc_width(8, lv.PART.MAIN)
-    ram_arc.set_style_arc_width(8, lv.PART.INDICATOR)
+    ram_arc.set_style_arc_width(7, lv.PART.MAIN)
+    ram_arc.set_style_arc_width(7, lv.PART.INDICATOR)
     ram_arc.set_style_arc_color(lv.color_hex(0x404040), lv.PART.MAIN)
     ram_arc.set_style_arc_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
     ram_arc.set_style_bg_opa(0, lv.PART.KNOB)  # Hide knob
     ram_arc.set_style_pad_all(0, lv.PART.KNOB)
     ram_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
-    # Center labels
+    # Center labels (positioned in arc)
     ram_pct_label = lv.label(tr)
     ram_pct_label.set_text(f"{_metrics['mem_pct']}%")
-    ram_pct_label.align(lv.ALIGN.CENTER, 0, -8)
+    ram_pct_label.align(lv.ALIGN.TOP_MID, 0, 31)
     ram_pct_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
     
     ram_text_label = lv.label(tr)
     ram_text_label.set_text("RAM")
-    ram_text_label.align(lv.ALIGN.CENTER, 0, 10)
+    ram_text_label.align(lv.ALIGN.TOP_MID, 0, 49)
     ram_text_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
     
     ram_detail_label = lv.label(tr)
     ram_detail_label.set_text(f"{_metrics['mem_used']}/{_metrics['mem_total']}GB")
-    ram_detail_label.align(lv.ALIGN.BOTTOM_MID, 0, -5)
+    ram_detail_label.align(lv.ALIGN.BOTTOM_MID, 0, 1)
     ram_detail_label.set_style_text_color(lv.color_hex(0x808080), 0)
     
     # BOTTOM LEFT - Network with bars
@@ -309,9 +312,14 @@ def show_main_page():
     bl.align(lv.ALIGN.BOTTOM_LEFT, 2, -2)
     bl.add_style(container_style, lv.PART.MAIN)
     
+    # Download arrow
+    net_in_img = lv.img(bl)
+    net_in_img.set_src("A:apps/proxmox/resources/arrow_red.png")
+    net_in_img.align(lv.ALIGN.TOP_LEFT, 6, 4)
+    
     net_in_label = lv.label(bl)
     net_in_label.set_text(f"Dn: {_metrics['netin']:.0f} KB/s")
-    net_in_label.align(lv.ALIGN.TOP_LEFT, 6, 4)
+    net_in_label.align(lv.ALIGN.TOP_LEFT, 24, 4)
     net_in_label.set_style_text_color(lv.color_hex(0xFF6B6B), 0)
     
     net_in_bar = lv.bar(bl)
@@ -321,9 +329,14 @@ def show_main_page():
     net_in_bar.set_style_bg_color(lv.color_hex(0x404040), lv.PART.MAIN)
     net_in_bar.set_style_bg_color(lv.color_hex(0xFF6B6B), lv.PART.INDICATOR)
     
+    # Upload arrow
+    net_out_img = lv.img(bl)
+    net_out_img.set_src("A:apps/proxmox/resources/arrow_green.png")
+    net_out_img.align(lv.ALIGN.TOP_LEFT, 6, 52)
+    
     net_out_label = lv.label(bl)
     net_out_label.set_text(f"Up: {_metrics['netout']:.0f} KB/s")
-    net_out_label.align(lv.ALIGN.TOP_LEFT, 6, 52)
+    net_out_label.align(lv.ALIGN.TOP_LEFT, 24, 52)
     net_out_label.set_style_text_color(lv.color_hex(0x00FF00), 0)
     
     net_out_bar = lv.bar(bl)
