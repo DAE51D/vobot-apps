@@ -239,7 +239,7 @@ def show_main_page():
     # Arc gauge - smaller and positioned at top
     cpu_arc = lv.arc(tl)
     cpu_arc.set_size(75, 75)
-    cpu_arc.align(lv.ALIGN.TOP_MID, 0, 3)
+    cpu_arc.align(lv.ALIGN.TOP_MID, 0, 0)
     cpu_arc.set_range(0, 100)
     cpu_arc.set_value(int(_metrics['cpu']))
     cpu_arc.set_bg_angles(0, 360)
@@ -252,15 +252,15 @@ def show_main_page():
     cpu_arc.set_style_pad_all(0, lv.PART.KNOB)
     cpu_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
-    # Center labels (positioned in arc)
+    # Center labels (positioned in arc center)
     cpu_pct_label = lv.label(tl)
     cpu_pct_label.set_text(f"{_metrics['cpu']}%")
-    cpu_pct_label.align(lv.ALIGN.TOP_MID, 0, 31)
+    cpu_pct_label.align(lv.ALIGN.TOP_MID, 0, 18)
     cpu_pct_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
     
     cpu_text_label = lv.label(tl)
     cpu_text_label.set_text("CPU")
-    cpu_text_label.align(lv.ALIGN.TOP_MID, 0, 49)
+    cpu_text_label.align(lv.ALIGN.TOP_MID, 0, 36)
     cpu_text_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
     
     cpu_count_label = lv.label(tl)
@@ -277,7 +277,7 @@ def show_main_page():
     # Arc gauge - smaller and positioned at top
     ram_arc = lv.arc(tr)
     ram_arc.set_size(75, 75)
-    ram_arc.align(lv.ALIGN.TOP_MID, 0, 3)
+    ram_arc.align(lv.ALIGN.TOP_MID, 0, 0)
     ram_arc.set_range(0, 100)
     ram_arc.set_value(int(_metrics['mem_pct']))
     ram_arc.set_bg_angles(0, 360)
@@ -290,15 +290,15 @@ def show_main_page():
     ram_arc.set_style_pad_all(0, lv.PART.KNOB)
     ram_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
-    # Center labels (positioned in arc)
+    # Center labels (positioned in arc center)
     ram_pct_label = lv.label(tr)
     ram_pct_label.set_text(f"{_metrics['mem_pct']}%")
-    ram_pct_label.align(lv.ALIGN.TOP_MID, 0, 31)
+    ram_pct_label.align(lv.ALIGN.TOP_MID, 0, 18)
     ram_pct_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
     
     ram_text_label = lv.label(tr)
     ram_text_label.set_text("RAM")
-    ram_text_label.align(lv.ALIGN.TOP_MID, 0, 49)
+    ram_text_label.align(lv.ALIGN.TOP_MID, 0, 36)
     ram_text_label.set_style_text_color(lv.color_hex(0x00CED1), 0)
     
     ram_detail_label = lv.label(tr)
