@@ -27,8 +27,12 @@ https://discuss.myvobot.com/t/linux-cpu-gpu-temps/351/5
 <p align="center"><em>Web Setup Interface</em></p>
 </td>
 <td width="50%">
-<img src="./proxmox_critical_message.jpg" alt="Normal priority message" />
-<p align="center"><em>Critical Priority (Red)</em></p>
+<img src="./screenshot.jpg" alt="screenshot" />
+<p align="center"><em>Screenshot GUI</em></p>
+</td>
+<td width="50%">
+<img src="./screenshot_debug.jpg" alt="screenshot debug" />
+<p align="center"><em>Screenshot Debug</em></p>
 </td>
 </tr>
 </table>
@@ -79,7 +83,7 @@ When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/p
 
 ## Technical Details
 
-- **Version:** 0.0.1
+- **Version:** 0.0.8
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x
 - **Dependencies:** urequests, ujson, utime
@@ -104,5 +108,5 @@ In other words, YOLO. IDGAF what you do with this. Have fun. Make it better. Mak
 
 ---
 
-- **Version:** 0.0.1
-- **Last Updated:** December 14, 2025
+- **Version:** 0.0.8
+- **Last Updated:** December 17, 2025
