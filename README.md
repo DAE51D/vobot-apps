@@ -14,6 +14,10 @@ vobot-apps/
 │   ├── apps/
 │   │   └── ntfy/           # app package for device
 │   └── *.jpg               # screenshots
+├── proxmox/                 # Proxmox dashboard project folder
+│   ├── apps/
+│   │   └── proxmox/        # app package for device
+│   └── *.jpg               # screenshots
 ├── .venv/                   # workspace-level Python venv
 ├── .github/
 │   ├── copilot-instructions.md
@@ -37,6 +41,19 @@ A notification viewer for self-hosted ntfy servers. Displays push notifications 
 **Status:** 🚧 In Development (v0.0.2)
 
 See [ntfy/apps/ntfy/README.md](ntfy/README.md) for details.
+
+### proxmox
+
+A two-page Proxmox dashboard showing CPU/RAM arcs, network in/out bars with arrows, and VM/LXC counts; includes a text debug page (uptime, swap, disk, metrics).
+
+**Features:**
+- Rotary wheel navigation between dashboard and debug pages
+- CPU/RAM arc gauges; network KB/s bars; VM/LXC bars
+- Polls Proxmox every 10 seconds; shows uptime/swap/disk on debug page
+
+**Status:** 🚧 In Development (v0.0.9)
+
+See [proxmox/README.md](proxmox/README.md) for details.
 
 ## Vobot Mini Dock Platform
 
