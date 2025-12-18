@@ -5,7 +5,7 @@ import ujson
 import utime
 
 NAME = "Proxmox"
-VERSION = "0.0.9"
+VERSION = "0.0.8"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
 
@@ -42,6 +42,7 @@ _metrics = {
     'disk_used': 0,
     'disk_total': 0
 }
+
 
 def get_settings_json():
     return {
@@ -182,25 +183,23 @@ def show_current_page():
         show_debug_page()
 
 def show_debug_page():
-    """Page 1: Debug text with all raw values"""
+    """Page 1: Debug text with all raw values (rebuild each time)"""
     if not _scr:
         return
-    
     _scr.clean()
-    
+
     if not API_SECRET:
         error_label = lv.label(_scr)
         error_label.set_text("Not Configured\n\nGo to http://192.168.1.32/apps")
         error_label.center()
         error_label.set_style_text_color(lv.color_hex(0xFF6B6B), 0)
         return
-    
-    debug_label = lv.label(_scr)
+
     uptime_d = _metrics['uptime'] // 86400
     uptime_h = (_metrics['uptime'] % 86400) // 3600
     uptime_m = (_metrics['uptime'] % 3600) // 60
     uptime_s = _metrics['uptime'] % 60
-    
+
     text = f"DEBUG DATA (Page 2/2)\n"
     text += f"Up: {uptime_d}d {uptime_h}:{uptime_m:02d}:{uptime_s:02d}\n"
     text += f"CPU: {_metrics['cpu']}%\n"
@@ -211,18 +210,18 @@ def show_debug_page():
     text += f"Net Dn: {_metrics['netin']:.0f} KB/s\n"
     text += f"VMs: {_metrics['vm_running']}/{_metrics['vm_total']}\n"
     text += f"LXCs: {_metrics['lxc_running']}/{_metrics['lxc_total']}"
-    
-    debug_label.set_text(text)
-    debug_label.align(lv.ALIGN.TOP_LEFT, 8, 8)
-    debug_label.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
+
+    lbl = lv.label(_scr)
+    lbl.align(lv.ALIGN.TOP_LEFT, 8, 8)
+    lbl.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
+    lbl.set_text(text)
 
 def show_main_page():
-    """Page 0: Main dashboard - 4 quadrants"""
+    """Page 0: Main dashboard - 4 quadrants (rebuild each time)"""
     if not _scr:
         return
-    
     _scr.clean()
-    
+
     container_style = lv.style_t()
     container_style.init()
     container_style.set_pad_all(8)
@@ -248,7 +247,7 @@ def show_main_page():
     cpu_arc.set_style_arc_width(7, lv.PART.INDICATOR)
     cpu_arc.set_style_arc_color(lv.color_hex(0x404040), lv.PART.MAIN)
     cpu_arc.set_style_arc_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
-    cpu_arc.set_style_bg_opa(0, lv.PART.KNOB)  # Hide knob
+    cpu_arc.set_style_bg_opa(0, lv.PART.KNOB)
     cpu_arc.set_style_pad_all(0, lv.PART.KNOB)
     cpu_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
@@ -286,7 +285,7 @@ def show_main_page():
     ram_arc.set_style_arc_width(7, lv.PART.INDICATOR)
     ram_arc.set_style_arc_color(lv.color_hex(0x404040), lv.PART.MAIN)
     ram_arc.set_style_arc_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
-    ram_arc.set_style_bg_opa(0, lv.PART.KNOB)  # Hide knob
+    ram_arc.set_style_bg_opa(0, lv.PART.KNOB)
     ram_arc.set_style_pad_all(0, lv.PART.KNOB)
     ram_arc.clear_flag(lv.obj.FLAG.CLICKABLE)
     
@@ -378,6 +377,8 @@ def show_main_page():
     lxc_bar.set_style_bg_color(lv.color_hex(0x404040), lv.PART.MAIN)
     lxc_bar.set_style_bg_color(lv.color_hex(0x00CED1), lv.PART.INDICATOR)
 
+# (Reverted) No widget-caching updater; pages are rebuilt when shown
+
 async def on_boot(apm):
     """App lifecycle: Called when app first loaded"""
     global _app_mgr, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET
@@ -435,4 +436,5 @@ async def on_running_foreground():
     if now - _last_fetch_time >= POLL_TIME:
         _last_fetch_time = now
         await fetch_proxmox_data()
-        show_current_page()  # Refresh current page with new data
+        # Rebuild current page with fresh data
+        show_current_page()
