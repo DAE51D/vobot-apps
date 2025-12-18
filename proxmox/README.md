@@ -1,6 +1,6 @@
-# proxmox App for Vobot Mini Dock
+# Proxmox App for Vobot Mini Dock
 
-A MicroPython Proxmox dashboard (CPU, RAM, network, VM/LXC counts) for the Vobot Mini Dock.
+A MicroPython [Proxmox](https://www.proxmox.com/en/products/proxmox-virtual-environment/overview) dashboard (CPU, RAM, network, VM/LXC counts) for the Vobot Mini Dock.
 
 ## Overview
 
@@ -83,7 +83,7 @@ When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/p
 
 ## Technical Details
 
-- **Version:** 0.0.8
+- **Version:** 0.0.9
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x (arcs/bars/labels; png arrows via `lv.img`)
 - **Dependencies:** urequests, ujson, utime
@@ -107,8 +107,3 @@ I used this guide to make a token: https://www.home-assistant.io/integrations/pr
 [baba-yaga](https://github.com/ErikMcClure/bad-licenses/blob/master/baba-yaga)
 
 In other words, YOLO. IDGAF what you do with this. Have fun. Make it better. Make a million dollars off it. Learn something new (as I did). Make the community a better place by contributing to it something for the sad sad "[app store](https://app.myvobot.com/)"
-
----
-
-- **Version:** 0.0.8
-- **Last Updated:** December 17, 2025
