@@ -17,6 +17,8 @@ NODE_NAME = "proxmox"
 API_TOKEN_ID = "api@pam!homepage"
 API_SECRET = ""  # Must be configured via web settings
 POLL_TIME = 10  # seconds between updates
+VM_THRESHOLD = 0  # Alert if VMs running below this count (0 = disabled)
+LXC_THRESHOLD = 0  # Alert if LXCs running below this count (0 = disabled)
 
 # Globals
 _scr = None
@@ -73,7 +75,7 @@ def get_settings_json():
                 "caption": "API Token ID",
                 "name": "api_token_id",
                 "attributes": {"maxLength": 50, "placeholder": "api@realm!token_id"},
-                "tip": "API token ID"
+                "tip": "API token ID api@realm!token_id"
             },
             {
                 "type": "input",
@@ -82,6 +84,22 @@ def get_settings_json():
                 "name": "api_secret",
                 "attributes": {"maxLength": 36, "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"},
                 "tip": "API token secret (UUID)"
+            },
+            {
+                "type": "input",
+                "default": "0",
+                "caption": "VM Threshold",
+                "name": "vm_threshold",
+                "attributes": {"maxLength": 3, "placeholder": "0"},
+                "tip": "Alert if running VMs fall below this count (0 = disabled)"
+            },
+            {
+                "type": "input",
+                "default": "0",
+                "caption": "LXC Threshold",
+                "name": "lxc_threshold",
+                "attributes": {"maxLength": 3, "placeholder": "0"},
+                "tip": "Alert if running LXCs fall below this count (0 = disabled)"
             }
         ]
     }
@@ -484,12 +502,36 @@ def _update_ui_for_current_page():
 
     vm_total = int(_metrics['vm_total'])
     vm_running = int(_metrics['vm_running'])
-    _ui['vm_label'].set_text(f"VMs: {vm_running}/{vm_total}")
+    # Check VM threshold and update label/color
+    vm_deficit = 0
+    vm_alert = False
+    if VM_THRESHOLD > 0 and vm_running < VM_THRESHOLD:
+        vm_deficit = VM_THRESHOLD - vm_running
+        vm_alert = True
+        print(f"VM ALERT: running={vm_running} < threshold={VM_THRESHOLD}, deficit={vm_deficit}")
+        _ui['vm_label'].set_text(f"VMs: {vm_running}-{vm_deficit}/{vm_total}")
+        _ui['vm_bar'].set_style_bg_color(_styles['c_red'], lv.PART.INDICATOR)
+    else:
+        print(f"VM OK: running={vm_running}, threshold={VM_THRESHOLD}")
+        _ui['vm_label'].set_text(f"VMs: {vm_running}/{vm_total}")
+        _ui['vm_bar'].set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
     _ui['vm_bar'].set_value(int((vm_running * 100) / (vm_total if vm_total else 1)), lv.ANIM.OFF)
 
     lxc_total = int(_metrics['lxc_total'])
     lxc_running = int(_metrics['lxc_running'])
-    _ui['lxc_label'].set_text(f"LXCs: {lxc_running}/{lxc_total}")
+    # Check LXC threshold and update label/color
+    lxc_deficit = 0
+    lxc_alert = False
+    if LXC_THRESHOLD > 0 and lxc_running < LXC_THRESHOLD:
+        lxc_deficit = LXC_THRESHOLD - lxc_running
+        lxc_alert = True
+        print(f"LXC ALERT: running={lxc_running} < threshold={LXC_THRESHOLD}, deficit={lxc_deficit}")
+        _ui['lxc_label'].set_text(f"LXCs: {lxc_running}-{lxc_deficit}/{lxc_total}")
+        _ui['lxc_bar'].set_style_bg_color(_styles['c_red'], lv.PART.INDICATOR)
+    else:
+        print(f"LXC OK: running={lxc_running}, threshold={LXC_THRESHOLD}")
+        _ui['lxc_label'].set_text(f"LXCs: {lxc_running}/{lxc_total}")
+        _ui['lxc_bar'].set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
     _ui['lxc_bar'].set_value(int((lxc_running * 100) / (lxc_total if lxc_total else 1)), lv.ANIM.OFF)
 
     # Debug page updates
@@ -517,9 +559,20 @@ def _update_ui_for_current_page():
             f"Disk: {_metrics['disk_pct']}% ({_metrics['disk_used']}/{_metrics['disk_total']}GB)",
             f"Net Up: {netout:.0f} KB/s",
             f"Net Dn: {netin:.0f} KB/s",
-            f"VMs: {vm_running}/{vm_total}",
-            f"LXCs: {lxc_running}/{lxc_total}",
         ]
+        
+        # Add VM count with threshold if set
+        vm_line = f"VMs: {vm_running}/{vm_total}"
+        if VM_THRESHOLD > 0:
+            vm_line += f" [{VM_THRESHOLD}]"
+        lines.append(vm_line)
+        
+        # Add LXC count with threshold if set
+        lxc_line = f"LXCs: {lxc_running}/{lxc_total}"
+        if LXC_THRESHOLD > 0:
+            lxc_line += f" [{LXC_THRESHOLD}]"
+        lines.append(lxc_line)
+        
         _ui['debug_label'].set_text("\n".join(lines))
 
 def show_debug_page():
@@ -542,7 +595,7 @@ def show_main_page():
 
 async def on_boot(apm):
     """App lifecycle: Called when app first loaded"""
-    global _app_mgr, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET
+    global _app_mgr, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD
     _app_mgr = apm
     
     # Load settings
@@ -553,10 +606,59 @@ async def on_boot(apm):
             NODE_NAME = cfg.get("node_name", NODE_NAME)
             API_TOKEN_ID = cfg.get("api_token_id", API_TOKEN_ID)
             API_SECRET = cfg.get("api_secret", API_SECRET)
+            
+            # Load thresholds
+            vm_thresh = cfg.get("vm_threshold")
+            if vm_thresh:
+                try:
+                    VM_THRESHOLD = int(vm_thresh)
+                    print(f"Loaded VM_THRESHOLD: {VM_THRESHOLD}")
+                except ValueError:
+                    print(f"Invalid VM threshold value: {vm_thresh}")
+            
+            lxc_thresh = cfg.get("lxc_threshold")
+            if lxc_thresh:
+                try:
+                    LXC_THRESHOLD = int(lxc_thresh)
+                    print(f"Loaded LXC_THRESHOLD: {LXC_THRESHOLD}")
+                except ValueError:
+                    print(f"Invalid LXC threshold value: {lxc_thresh}")
 
 async def on_start():
     """App lifecycle: Called when user enters app"""
-    global _scr, _current_page
+    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD
+    
+    # Reload settings every time app starts (in case user changed them via web UI)
+    if _app_mgr:
+        cfg = _app_mgr.config()
+        if isinstance(cfg, dict):
+            PVE_HOST = cfg.get("pve_host", PVE_HOST)
+            NODE_NAME = cfg.get("node_name", NODE_NAME)
+            API_TOKEN_ID = cfg.get("api_token_id", API_TOKEN_ID)
+            API_SECRET = cfg.get("api_secret", API_SECRET)
+            
+            # Load thresholds
+            vm_thresh = cfg.get("vm_threshold")
+            if vm_thresh:
+                try:
+                    VM_THRESHOLD = int(vm_thresh)
+                    print(f"[on_start] Loaded VM_THRESHOLD: {VM_THRESHOLD}")
+                except ValueError:
+                    print(f"[on_start] Invalid VM threshold: {vm_thresh}")
+            else:
+                VM_THRESHOLD = 0
+                print("[on_start] VM threshold not set, using 0")
+            
+            lxc_thresh = cfg.get("lxc_threshold")
+            if lxc_thresh:
+                try:
+                    LXC_THRESHOLD = int(lxc_thresh)
+                    print(f"[on_start] Loaded LXC_THRESHOLD: {LXC_THRESHOLD}")
+                except ValueError:
+                    print(f"[on_start] Invalid LXC threshold: {lxc_thresh}")
+            else:
+                LXC_THRESHOLD = 0
+                print("[on_start] LXC threshold not set, using 0")
     
     if not _scr:
         _scr = lv.obj()
@@ -576,25 +678,30 @@ async def on_start():
         # Build the UI once. Subsequent refreshes only update existing widgets.
         _ensure_ui()
     
-    # Fetch initial data
+    # Show UI immediately (page 0 = main dashboard with default/cached values)
+    _current_page = 0
+    show_current_page()
+    
+    # Fetch initial data in background (non-blocking so UI appears instantly)
     await fetch_proxmox_data()
     
-    # Start on debug page
-    _current_page = 0
+    # Update UI with fresh data
     show_current_page()
 
 async def on_stop():
     """App lifecycle: Called when user leaves app"""
     global _scr, _app_mgr, _ui, _styles
+    
+    # Fast exit: leave root page immediately so user sees app close
+    if _app_mgr:
+        _app_mgr.leave_root_page()
+    
+    # Clean up screen and widgets (non-blocking)
     if _scr:
-        # Delete the screen; cached widgets/styles will be released with it.
         _scr.clean()
-        _scr.delete_async()
         _scr = None
         _ui = None
         _styles = None
-        if _app_mgr:
-            _app_mgr.leave_root_page()
 
 async def on_running_foreground():
     """App lifecycle: Called repeatedly when app is active (~200ms)"""
