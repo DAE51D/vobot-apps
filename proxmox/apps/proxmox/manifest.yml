@@ -1,6 +1,6 @@
 application:
   name: Proxmox
-  version: 0.0.9
+  version: 1.0.0
   author: Daevid
   description: Display Proxmox node metrics and VM/LXC counts
   icon: A:apps/proxmox/resources/icon.png

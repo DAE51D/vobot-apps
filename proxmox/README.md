@@ -4,14 +4,19 @@ A MicroPython [Proxmox](https://www.proxmox.com/en/products/proxmox-virtual-envi
 
 ## Overview
 
-Displays CPU/RAM gauges, network throughput, and VM/LXC counts from a Proxmox node. Two pages: main dashboard with arcs/bars and a debug text page. Navigate with the rotary wheel.
+Displays CPU/RAM gauges, network throughput, and VM/LXC counts from a Proxmox node with below threshold "alert".
+Two pages: main dashboard with arcs/bars and a debug text page. Navigate with the rotary wheel.
 
 ## Features
 
 - Two-page UI: arc/bars dashboard plus text debug page
-- CPU/RAM arcs, network in/out bars with arrows, VM/LXC bars
+- CPU/RAM arcs, network in/out bars with arrows, VM/LXC count bars
 - Rotary encoder navigation (LEFT/RIGHT to switch pages)
-- Polls Proxmox every 10 seconds, shows swap/disk/uptime on debug page
+- Polls Proxmox every N seconds, shows swap/disk/uptime on debug page
+- LXC and VM threshold with red "alert" bar and how many computes are deficient
+
+> Note that this is doing a bunch of API calls and rendering a lot of widgets, so we're pushing what this little ESP32 can do.
+> There can be intermittent (noticable) lag when using the wheel/buttons. We've tried to optimize as best we could.
 
 ## Screenshots
 
@@ -83,7 +88,7 @@ When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/p
 
 ## Technical Details
 
-- **Version:** 0.0.9
+- **Version:** 1.0.0
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x (arcs/bars/labels; png arrows via `lv.img`)
 - **Dependencies:** urequests, ujson, utime
