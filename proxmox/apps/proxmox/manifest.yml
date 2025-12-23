@@ -1,10 +1,14 @@
 application:
-  name: Proxmox
+  name: proxmox
   version: 1.0.0
-  author: Daevid
-  description: Display Proxmox node metrics and VM/LXC counts
-  icon: A:apps/proxmox/resources/icon.png
   category: Utility
+  icon: A:apps/proxmox/resources/icon.png
+  description: Display Proxmox node metrics and VM/LXC counts
+  author: Daevid Vincent
+  author_email: daevid@daevid.com
+  bugs: https://github.com/DAE51D/vobot-apps/issues
+  repository: https://github.com/DAE51D/vobot-apps/tree/main/proxmox
+  licenses: baba-yaga  
 
 system_requirements:
   minimum_version: 1.1.0

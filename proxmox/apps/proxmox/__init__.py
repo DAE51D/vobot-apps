@@ -4,8 +4,10 @@ import urequests as requests
 import ujson
 import utime
 
-NAME = "Proxmox"
-VERSION = "0.0.9"
+# Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
+# https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
+NAME = "proxmox"
+VERSION = "1.0.0"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
 
@@ -13,8 +15,8 @@ _SCR_WIDTH, _SCR_HEIGHT = peripherals.screen.screen_resolution
 
 # Default settings
 PVE_HOST = "proxmox.home.lan:8006"
-NODE_NAME = "proxmox"
-API_TOKEN_ID = "api@pam!homepage"
+NODE_NAME = "pve"
+API_TOKEN_ID = "api@realm!token_id"
 API_SECRET = ""  # Must be configured via web settings
 POLL_TIME = 10  # seconds between updates
 VM_THRESHOLD = 0  # Alert if VMs running below this count (0 = disabled)
