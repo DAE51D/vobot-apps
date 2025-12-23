@@ -1,12 +1,14 @@
 application:
   name: ntfy
   version: 1.0.0
+  category: Utility
+  icon: A:apps/ntfy/resources/icon.png
   description: Display notifications from ntfy server on Vobot Mini Dock
   author: Daevid Vincent
   author_email: daevid@daevid.com
   bugs: https://github.com/DAE51D/vobot-apps/issues
   repository: https://github.com/DAE51D/vobot-apps/tree/main/ntfy
-  licenses: MIT
+  licenses: baba-yaga
 
 system_requirements:
   minimum_version: 1.1.0
