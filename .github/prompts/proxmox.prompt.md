@@ -47,7 +47,9 @@ Page 1:
   - Network In line graph
   - Network Out KB/s
   - Network Out line graph
-  - use green and red arrows on text lines
+  - use blue up/down arrow icons on text lines (avoid red alarm styling)
+  - keep text white and both network bars in the same blue accent as VM/LXC bars
+  - disable tile scrollbars (`clear_flag(lv.obj.FLAG.SCROLLABLE)` and `set_scrollbar_mode(lv.SCROLLBAR_MODE.OFF)` when available)
 - bottom right:
   - VMs: running / total
   - line graph like network %
@@ -170,6 +172,7 @@ Use the standard Vobot settings method to configure these variables
 1. **Setup project structure**:
    - Create `/apps/proxmox/` folder
    - Create `__init__.py` with lifecycle methods
+  - Set `CAN_BE_AUTO_SWITCHED = True` in `__init__.py` so the app is eligible in auto-switch rotation
    - Define global variables for state
 
 2. **Implement message fetching**:

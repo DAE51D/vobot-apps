@@ -7,9 +7,10 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
+CAN_BE_AUTO_SWITCHED = True
 
 _SCR_WIDTH, _SCR_HEIGHT = peripherals.screen.screen_resolution
 
@@ -305,6 +306,9 @@ def _ensure_ui():
     tl.set_size(155, 115)
     tl.align(lv.ALIGN.TOP_LEFT, 2, 2)
     tl.add_style(c, lv.PART.MAIN)
+    tl.clear_flag(lv.obj.FLAG.SCROLLABLE)
+    if hasattr(tl, "set_scrollbar_mode"):
+        tl.set_scrollbar_mode(lv.SCROLLBAR_MODE.OFF)
 
     cpu_arc = lv.arc(tl)
     cpu_arc.set_size(75, 75)
@@ -339,6 +343,9 @@ def _ensure_ui():
     tr.set_size(155, 115)
     tr.align(lv.ALIGN.TOP_RIGHT, -2, 2)
     tr.add_style(c, lv.PART.MAIN)
+    tr.clear_flag(lv.obj.FLAG.SCROLLABLE)
+    if hasattr(tr, "set_scrollbar_mode"):
+        tr.set_scrollbar_mode(lv.SCROLLBAR_MODE.OFF)
 
     ram_arc = lv.arc(tr)
     ram_arc.set_size(75, 75)
@@ -372,40 +379,46 @@ def _ensure_ui():
     bl.set_size(155, 118)
     bl.align(lv.ALIGN.BOTTOM_LEFT, 2, -2)
     bl.add_style(c, lv.PART.MAIN)
+    bl.clear_flag(lv.obj.FLAG.SCROLLABLE)
+    if hasattr(bl, "set_scrollbar_mode"):
+        bl.set_scrollbar_mode(lv.SCROLLBAR_MODE.OFF)
 
     net_in_img = lv.img(bl)
-    net_in_img.set_src("A:apps/proxmox/resources/arrow_red.png")
-    net_in_img.align(lv.ALIGN.TOP_LEFT, 6, 4)
+    net_in_img.set_src("A:apps/proxmox/resources/arrow_down.png")
+    net_in_img.align(lv.ALIGN.TOP_LEFT, 0, 4)
 
     net_in_label = lv.label(bl)
-    net_in_label.align(lv.ALIGN.TOP_LEFT, 24, 4)
-    net_in_label.set_style_text_color(_styles['c_red'], 0)
+    net_in_label.align(lv.ALIGN.TOP_LEFT, 18, 4)
+    net_in_label.set_style_text_color(_styles['c_white'], 0)
 
     net_in_bar = lv.bar(bl)
     net_in_bar.set_size(135, 12)
-    net_in_bar.align(lv.ALIGN.TOP_LEFT, 10, 28)
+    net_in_bar.align(lv.ALIGN.TOP_LEFT, 4, 28)
     net_in_bar.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
-    net_in_bar.set_style_bg_color(_styles['c_red'], lv.PART.INDICATOR)
+    net_in_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
 
     net_out_img = lv.img(bl)
     net_out_img.set_src("A:apps/proxmox/resources/arrow_green.png")
-    net_out_img.align(lv.ALIGN.TOP_LEFT, 6, 52)
+    net_out_img.align(lv.ALIGN.TOP_LEFT, 0, 52)
 
     net_out_label = lv.label(bl)
-    net_out_label.align(lv.ALIGN.TOP_LEFT, 24, 52)
-    net_out_label.set_style_text_color(_styles['c_green'], 0)
+    net_out_label.align(lv.ALIGN.TOP_LEFT, 18, 52)
+    net_out_label.set_style_text_color(_styles['c_white'], 0)
 
     net_out_bar = lv.bar(bl)
     net_out_bar.set_size(135, 12)
-    net_out_bar.align(lv.ALIGN.TOP_LEFT, 10, 76)
+    net_out_bar.align(lv.ALIGN.TOP_LEFT, 4, 76)
     net_out_bar.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
-    net_out_bar.set_style_bg_color(_styles['c_green'], lv.PART.INDICATOR)
+    net_out_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
 
     # BOTTOM RIGHT - VM/LXC
     br = lv.obj(page_main)
     br.set_size(155, 118)
     br.align(lv.ALIGN.BOTTOM_RIGHT, -2, -2)
     br.add_style(c, lv.PART.MAIN)
+    br.clear_flag(lv.obj.FLAG.SCROLLABLE)
+    if hasattr(br, "set_scrollbar_mode"):
+        br.set_scrollbar_mode(lv.SCROLLBAR_MODE.OFF)
 
     vm_label = lv.label(br)
     vm_label.align(lv.ALIGN.TOP_LEFT, 6, 4)

@@ -27,6 +27,8 @@ vobot-apps/
 
 ## Apps
 
+Both apps are enabled for "App Auto-Switch" under "Settings > Miscellaneous". 
+
 ### ntfy
 
 A notification viewer for self-hosted ntfy servers. Displays push notifications with message navigation via rotary encoder.

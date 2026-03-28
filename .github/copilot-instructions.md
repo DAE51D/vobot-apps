@@ -47,6 +47,9 @@ NAME = "Your App Name"
 # A file path or data (bytes type) of the logo image for this app.
 # If not specified, the default icon will be applied.
 ICON = "A:apps/yourapp/resources/icon.png"
+# Required for app to be included in the auto-switch rotation.
+# Without this flag, the app will NOT appear in the auto-switch sequence.
+CAN_BE_AUTO_SWITCHED = True
 
 # LVGL widgets and app manager (globals)
 scr = None
@@ -321,9 +324,12 @@ print(f"Message time: {local_time[3]}:{local_time[4]:02d}")
 - Encoder handling: attach event handler with `lv.EVENT.ALL`, add screen to default group, call `lv.group_focus_obj(scr)`, and set editing `True`; otherwise the wheel does nothing.
 - Arcs: set rotation to 270, set bg angles to 0–360, hide knob with `set_style_bg_opa(0, lv.PART.KNOB)` and `set_style_pad_all(0, lv.PART.KNOB)`, use matching arc widths on main/indicator for consistent rings.
 - Images: use `lv.img` for PNG assets (arrows/icons); `lv.image` will black-screen on the device.
+- Images (rotation): runtime image transform/rotation for PNG arrows may not render reliably on-device; prefer dedicated assets (e.g., `arrow_up.png` and `arrow_down.png`).
 - Layout: center arc labels with small y offsets (e.g., y=18 and y=36) and place detail labels near the bottom for readability.
+- Tile containers: clear scrollability and disable scrollbar mode on tile objects to prevent phantom vertical/horizontal scrollbars.
 - Page switching: rebuilding the page on change is safer than caching widgets if performance allows; avoid `_scr.clean()` on every dial tick—only rebuild when the page actually changes.
 - Uploads: on constrained flash, prefer single-file uploads (e.g., only `__init__.py`) when space is tight; Thonny file view is the most reliable fallback.
+- Autoswitch validation: ensure `CAN_BE_AUTO_SWITCHED = True` is exported by each app module and verify in serial logs under `APP_MGR: user app ... ['...','CAN_BE_AUTO_SWITCHED', ...]`.
 
 ## Debugging Workflow
 
@@ -534,9 +540,10 @@ https://dock.myvobot.com/developer/guides/publishing-guide/manifest_file/
 - **DO NOT create** `setup.html` file
 
 ### Versioning Policy
-- Whenever bumping the Python app version (e.g., `__version__ = "0.0.X"` in `apps/ntfy/__init__.py`), **ALWAYS** bump `application.version` in `apps/ntfy/manifest.yml` to keep the `/apps` page version accurate.
+- Whenever bumping a Python app version (e.g., `__version__ = "0.0.X"` in `apps/<app>/__init__.py`), **ALWAYS** bump `application.version` in `apps/<app>/manifest.yml` to keep the `/apps` page version accurate.
 - The version shown on /apps comes from `manifest.yml`, NOT from Python code.
 - Verify the `/apps` page shows the updated version after upload.
+- For coordinated release snapshots across multiple apps, keep both `__init__.py` and `manifest.yml` versions aligned to the agreed release version (current target: `1.0.1`).
 
 ### Best Practices
 - Use sensible defaults for all settings (e.g., default topic `general`; ntfy requires at least one topic, use comma-separated list for multiple)
@@ -570,9 +577,18 @@ $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + 
 gh --version
 ```
 
+
 # Publishing
 
 When all complete and ready to publish to the Vobot app store follow these instructions
 https://dock.myvobot.com/developer/guides/publishing-guide/
 
 The packaging tool is found at: D:\daevid\Code\Vobot\dock-app-bundler-win.exe which is the root of the parent VSCode project folder as well.
+
+Point it at the "apps" SUBFOLDER of the apps' name (confusing I know). 
+Basically drill down to the folder above where the `__init__.py` file is.
+
+So for example, on my drive:
+
+- D:\daevid\Code\Vobot\proxmox\apps -> proxmox (not IN this `proxmox` folder, but select that one in the tool)
+- D:\daevid\Code\Vobot\ntfy\apps -> ntfy (not IN this `ntfy` folder, but select that one in the tool)

@@ -260,6 +260,7 @@ print(msg['message'])  # Output: Hello
 1. **Setup project structure**:
    - Create `/apps/ntfy/` folder
    - Create `__init__.py` with lifecycle methods
+    - Set `CAN_BE_AUTO_SWITCHED = True` in `__init__.py` so the app appears in auto-switch selection
    - Define global variables for state
 
 2. **Implement message fetching**:
