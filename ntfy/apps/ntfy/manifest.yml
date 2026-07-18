@@ -1,6 +1,6 @@
 application:
   name: ntfy
-  version: 1.0.2
+  version: 1.1.0
   category: Utility
   icon: A:apps/ntfy/resources/icon.png
   description: Display notifications from ntfy server on Vobot Mini Dock
