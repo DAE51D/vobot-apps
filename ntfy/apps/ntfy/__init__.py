@@ -8,7 +8,7 @@ import ujson
 import utime
 import clocktime
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 __version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
 # A file path or data (bytes type) of the logo image for this app.
@@ -40,6 +40,13 @@ new_badge_time = 0
 NEW_BADGE_TIMEOUT = 5  # seconds
 last_time_seen = 0
 new_badge_icon = None  # Priority icon shown on new message
+
+# Self-healing: recover from stale connections after the ntfy server restarts
+# (e.g. weekly LXC backup). Mirrors the "toggle WiFi off/on" fix needed on Android.
+consecutive_failures = 0
+WIFI_BOUNCE_THRESHOLD = 3   # consecutive failed fetches before bouncing WiFi
+WIFI_BOUNCE_COOLDOWN = 30   # seconds to wait before allowing another bounce
+last_bounce_time = -999
 
 def event_handler(e):
     """Handle encoder rotation for message navigation"""
@@ -360,9 +367,33 @@ async def on_start():
     except Exception as e:
         print(f"ERROR: {e}")
 
+def wifi_bounce():
+    """Toggle the WiFi radio off/on to clear a stale connection.
+
+    The ntfy LXC restarting (weekly backup, host reboot) leaves the ESP32's
+    lwIP/ARP state pointing at a dead socket, so requests keep failing even
+    though http://ntfy.home.lan works fine from other hosts. Power-cycling
+    the Vobot fixes it; this does the same recovery without a full reboot.
+    ESP-IDF keeps the last AP config in flash, so connect() needs no args.
+    """
+    global last_bounce_time
+    try:
+        import network
+        wlan = network.WLAN(network.STA_IF)
+        print("ntfy: bouncing WiFi to recover stuck connection...")
+        wlan.disconnect()
+        wlan.active(False)
+        utime.sleep(1)
+        wlan.active(True)
+        wlan.connect()
+        last_bounce_time = utime.time()
+    except Exception as e:
+        print(f"ntfy: WiFi bounce failed: {e}")
+
 async def on_running_foreground():
     """Called every ~200ms - fetch messages here, not on startup"""
     global last_fetch_time, messages, current_index, label_title, new_badge_icon, new_badge_time, last_time_seen
+    global consecutive_failures, last_bounce_time
     
     now = utime.time()
 
@@ -398,6 +429,7 @@ async def on_running_foreground():
         print(f"Status: {response.status_code}")
         
         if response.status_code == 200:
+            consecutive_failures = 0
             try:
                 label_title.set_style_text_color(lv.color_hex(0x00FF88), lv.PART.MAIN)
             except Exception:
@@ -501,21 +533,28 @@ async def on_running_foreground():
                 label_info.set_text(f"Error: {str(read_err)[:40]}")
         else:
             print(f"HTTP {response.status_code}")
+            consecutive_failures += 1
             try:
                 label_title.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
             except Exception:
                 pass
             label_info.set_text(f"Server error: {response.status_code}")
-        
+
         response.close()
-        
+
     except Exception as e:
         print(f"Fetch failed: {e}")
+        consecutive_failures += 1
         try:
             label_title.set_style_text_color(lv.color_hex(0xFF4444), lv.PART.MAIN)
         except Exception:
             pass
         label_info.set_text(f"Error: {str(e)[:40]}")
+
+    print(f"ntfy: consecutive_failures={consecutive_failures}")
+    if (consecutive_failures >= WIFI_BOUNCE_THRESHOLD
+            and (now - last_bounce_time) >= WIFI_BOUNCE_COOLDOWN):
+        wifi_bounce()
 
 async def on_stop():
     """Called when leaving app"""
