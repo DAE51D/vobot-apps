@@ -29,10 +29,18 @@ Pages can auto-cycle and can also be changed with the Vobot rotary encoder.
 
 <table>
 <tr>
-<td width="50%">
-<img src="./config.png" alt="nvtop configuration page" />
-<p align="center"><em>Web Setup Interface</em></p>
-</td>
+    <td width="33%">
+        <img src="./config.png" alt="nvtop configuration page" />
+        <p align="center"><em>Web Setup Interface</em></p>
+    </td>
+    <td width="33%">
+        <img src="./quadrants.jpg" alt="Quadrants" />
+        <p align="center"><em>Quadrants</em></p>
+    </td>
+    <td width="33%">
+        <img src="./gpu_mem_graph.jpg" alt="Graph" />
+        <p align="center"><em>GPU MEM graph</em></p>
+    </td>
 </tr>
 </table>
 

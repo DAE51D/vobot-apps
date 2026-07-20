@@ -217,6 +217,13 @@ def event_handler(e):
     global _current_page, _last_page_cycle_time
     e_code = e.get_code()
 
+    if e_code == lv.EVENT.FOCUSED:
+        # Some app-switch paths clear group edit mode; restore it whenever
+        # this screen regains focus so encoder KEY events continue arriving.
+        group = lv.group_get_default()
+        if group:
+            group.set_editing(True)
+
     if e_code == lv.EVENT.KEY:
         e_key = e.get_key()
         old_page = _current_page
@@ -566,18 +573,29 @@ async def on_start():
         _scr.set_style_bg_color(lv.color_hex3(0x000), lv.PART.MAIN)
         _scr.add_event(event_handler, lv.EVENT.ALL, None)
 
-        # Setup focus group for encoder events
-        group = lv.group_get_default()
-        if group:
+    # Always restore focus and screen load on app start/resume so the rotary
+    # encoder keeps sending KEY events after app switches.
+    group = lv.group_get_default()
+    if group:
+        try:
             group.add_obj(_scr)
-            lv.group_focus_obj(_scr)
-            group.set_editing(True)
+        except Exception:
+            pass
+        lv.group_focus_obj(_scr)
+        group.set_editing(True)
 
-        _app_mgr.enter_root_page()
-        lv.scr_load(_scr)
+    _app_mgr.enter_root_page()
+    lv.scr_load(_scr)
 
-        # Build the UI once. Subsequent refreshes only update existing widgets.
-        _ensure_ui()
+    # Re-assert focus after screen load because LVGL can move focus as part of
+    # root-page transitions, which would stop KEY events from reaching _scr.
+    group = lv.group_get_default()
+    if group:
+        lv.group_focus_obj(_scr)
+        group.set_editing(True)
+
+    # Build the UI once. Subsequent refreshes only update existing widgets.
+    _ensure_ui()
 
     _current_page = 0
     _last_page_cycle_time = utime.time()
