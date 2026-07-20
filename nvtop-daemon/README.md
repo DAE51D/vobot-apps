@@ -18,16 +18,44 @@ out-of-scope idea (would need a different data source than `nvidia-smi`).
 
 ## Endpoints
 
-- `GET /api/gpu-data` — `{"gpus": {"0": {...}}, "timestamp": <unix ts>}`
-- `GET /health` — `{"status": "ok"}`
+- `GET /api/gpu-data` — `{"gpus": {"0": {...}}, "processes": {...}, "timestamp": <unix ts>, "git_commit": "<short sha>"}`
+- `GET /health` — `{"status": "ok", "git_commit": "<short sha>"}`
+
+Every response includes `git_commit` — the short git SHA of the code that's
+actually running, stamped in at deploy time (see below). Compare it against
+`git rev-parse --short HEAD` locally to confirm the daemon isn't stale before
+chasing a "bug" that's really just an un-deployed fix. A `-dirty` suffix means
+the deployed file didn't match the last commit when it was pushed out.
 
 ## Deploy (systemd, Debian/Proxmox host)
 
-```bash
-mkdir -p /opt/vobot-gpu-daemon
-scp vobot_gpu_daemon.py root@proxmox:/opt/vobot-gpu-daemon/
+Start from within this directory: `cd ./nvtop-daemon`
+
+**Windows (PowerShell)** — uses the OpenSSH client built into Windows 11 for `ssh`/`scp`:
+```powershell
+$GitHash = git rev-parse --short HEAD
+git diff --quiet -- vobot_gpu_daemon.py
+if ($LASTEXITCODE -ne 0) { $GitHash = "$GitHash-dirty" }
+$Stamped = Join-Path $env:TEMP 'vobot_gpu_daemon.stamped.py'
+(Get-Content vobot_gpu_daemon.py -Raw) -replace '(?m)^GIT_COMMIT = .*', "GIT_COMMIT = `"$GitHash`"" |
+    Set-Content -Path $Stamped -NoNewline -Encoding utf8
+
+ssh root@proxmox "mkdir -p /opt/vobot-gpu-daemon"
+scp $Stamped root@proxmox:/opt/vobot-gpu-daemon/vobot_gpu_daemon.py
 scp vobot-gpu-daemon.service root@proxmox:/etc/systemd/system/
-ssh root@proxmox "systemctl daemon-reload && systemctl enable --now vobot-gpu-daemon"
+ssh root@proxmox "systemctl daemon-reload && systemctl restart vobot-gpu-daemon"
+curl http://proxmox.home.lan:8039/api/gpu-data
+```
+
+**Linux/macOS (bash)**:
+```bash
+GIT_HASH=$(git rev-parse --short HEAD)$(git diff --quiet -- vobot_gpu_daemon.py || echo -dirty)
+sed "s/^GIT_COMMIT = .*/GIT_COMMIT = \"$GIT_HASH\"/" vobot_gpu_daemon.py > /tmp/vobot_gpu_daemon.stamped.py
+
+ssh root@proxmox "mkdir -p /opt/vobot-gpu-daemon"
+scp /tmp/vobot_gpu_daemon.stamped.py root@proxmox:/opt/vobot-gpu-daemon/vobot_gpu_daemon.py
+scp vobot-gpu-daemon.service root@proxmox:/etc/systemd/system/
+ssh root@proxmox "systemctl daemon-reload && systemctl restart vobot-gpu-daemon"
 curl http://proxmox.home.lan:8039/api/gpu-data
 ```
 

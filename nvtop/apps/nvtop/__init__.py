@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 __version__ = VERSION
 ICON = "A:apps/nvtop/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
@@ -59,6 +59,7 @@ _metrics = {
     'pstate': '?',
     'throttle': 'None',
     'processes': [],
+    'daemon_commit': '?',
 }
 
 
@@ -161,12 +162,13 @@ async def fetch_gpu_data():
     url = f"{SERVER}/api/gpu-data"
     resp = None
     try:
-        resp = requests.get(url, headers=headers)
+        resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code != 200:
             _fetch_ok = False
             return False
 
         data = resp.json()
+        _metrics['daemon_commit'] = str(data.get('git_commit') or '?')
         gpus = data.get('gpus', {}) or {}
         g = gpus.get(GPU_INDEX)
         if g is None and gpus:
@@ -305,6 +307,7 @@ def _ensure_styles():
         'c_white': lv.color_hex(0xFFFFFF),
         'c_gray': lv.color_hex(0x808080),
         'c_dark': lv.color_hex(0x404040),
+        'c_gridline': lv.color_hex(0x606060),  # subtle 25/50/75% chart gridlines
         'c_accent': lv.color_hex(0x76B900),  # NVIDIA-ish green, matches the app icon
         'c_orange': lv.color_hex(0xFFA500),
         'c_blue': lv.color_hex(0x58A6FF),
@@ -429,7 +432,7 @@ def _ensure_ui():
 
     hist_title_act = lv.label(page_history)
     hist_title_act.set_text("MEM Activity %")
-    hist_title_act.align(lv.ALIGN.TOP_MID, 0, 4)
+    hist_title_act.align(lv.ALIGN.TOP_MID, -14, 4)  # nudge left so it clears "MEM Used %"
     hist_title_act.set_style_text_color(_styles['c_blue'], 0)
 
     chart = lv.chart(page_history)
@@ -439,7 +442,9 @@ def _ensure_ui():
     chart.clear_flag(lv.obj.FLAG.CLICKABLE)
     chart.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
     chart.set_style_bg_opa(lv.OPA.COVER, lv.PART.MAIN)
-    chart.set_style_border_width(0, lv.PART.MAIN)
+    chart.set_style_border_width(1, lv.PART.MAIN)  # frames the 0%/100% edges
+    chart.set_style_border_color(_styles['c_gridline'], lv.PART.MAIN)
+    chart.set_style_border_opa(lv.OPA.COVER, lv.PART.MAIN)
     chart.set_style_pad_all(4, lv.PART.MAIN)
     chart.set_type(lv.chart.TYPE.LINE)
     chart.set_point_count(HISTORY_POINTS)
@@ -448,9 +453,14 @@ def _ensure_ui():
     except Exception:
         chart.set_range(lv.chart.AXIS.PRIMARY_Y, 0, 100)
     try:
+        # hdiv=3 draws 3 internal horizontal lines -> evenly splits 0-100 into
+        # the 25/50/75% marks; the border above adds the 0%/100% edges.
         chart.set_div_line_count(3, 0)
     except Exception:
         pass
+    chart.set_style_line_color(_styles['c_gridline'], lv.PART.MAIN)
+    chart.set_style_line_width(1, lv.PART.MAIN)
+    chart.set_style_line_opa(lv.OPA.COVER, lv.PART.MAIN)
     util_series = chart.add_series(_styles['c_accent'], lv.chart.AXIS.PRIMARY_Y)
     mem_series = chart.add_series(_styles['c_orange'], lv.chart.AXIS.PRIMARY_Y)
     mem_act_series = chart.add_series(_styles['c_blue'], lv.chart.AXIS.PRIMARY_Y)
@@ -633,6 +643,7 @@ def _update_ui_for_current_page():
         pstate = _metrics['pstate']
         throttle = _metrics['throttle']
         mem_activity = _metrics['mem_activity']
+        daemon_commit = _metrics['daemon_commit']
 
         lines = [
             f"Clock GFX: {clock_gfx}/{clock_gfx_max} MHz",
@@ -642,6 +653,7 @@ def _update_ui_for_current_page():
             f"PCIe: Gen{pcie_gen}x{pcie_width} (max Gen{pcie_gen_max}x{pcie_width_max})",
             f"State: {pstate}",
             f"Throttle: {throttle}",
+            f"Daemon: {daemon_commit}  App: {VERSION}",
         ]
         _ui['details_body'].set_text("\n".join(lines))
 
@@ -677,7 +689,7 @@ async def on_boot(apm):
 
 async def on_start():
     """App lifecycle: Called when user enters app"""
-    global _scr, _current_page, _last_page_cycle_time
+    global _scr, _current_page, _last_page_cycle_time, _last_fetch_time
 
     # Reload settings every time app starts (in case user changed them via web UI)
     _load_settings()
@@ -717,6 +729,7 @@ async def on_start():
 
     # Fetch initial data so the UI isn't empty on entry
     await fetch_gpu_data()
+    _last_fetch_time = utime.time()  # avoid an immediate duplicate fetch on the next foreground tick
     show_current_page()
 
 

@@ -108,11 +108,12 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 
 ### Controls
 
-| Action | Function |
-|--------|----------|
-| Rotate clockwise / counter-clockwise | Change pages |
-| Wait | Auto-cycle pages if enabled |
-| Press ESC | Exit app |
+
+| Action                               | Function                    |
+| -------------------------------------- | ----------------------------- |
+| Rotate clockwise / counter-clockwise | Change pages                |
+| Wait                                 | Auto-cycle pages if enabled |
+| Press ESC                            | Exit app                    |
 
 ### Pages
 

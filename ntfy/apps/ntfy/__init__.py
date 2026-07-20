@@ -13,7 +13,7 @@ try:
 except Exception:
     asyncio = None
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 __version__ = VERSION  # Expose version for web UI
 NAME = "ntfy"
 # A file path or data (bytes type) of the logo image for this app.
@@ -389,7 +389,11 @@ async def on_start():
     """Called when app starts - set up UI and load config"""
     global scr, banner, banner_icon, banner_label, counter_label, time_label, status_dot
     global content_panel, content_label, mode_dot, footer_label, pager_dots, recolor_ok, FONT_SMALL
-    global NTFY_SERVER, NTFY_TOPIC, MAX_MESSAGES, fetch_interval, CONNECTION_MODE
+    global NTFY_SERVER, NTFY_TOPIC, MAX_MESSAGES, fetch_interval, CONNECTION_MODE, last_fetch_time
+
+    # Force an immediate fetch on the next foreground tick instead of waiting out
+    # whatever's left of the throttle window from before the app was backgrounded.
+    last_fetch_time = -999
 
     print("=== ntfy on_start() ===")
     print(f"app_mgr: {app_mgr}")

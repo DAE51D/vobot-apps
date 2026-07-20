@@ -7,7 +7,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 __version__ = VERSION
 ICON = "A:apps/proxmox/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
@@ -126,7 +126,7 @@ async def fetch_proxmox_data():
         url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/status"
         resp = None
         try:
-            resp = requests.get(url, headers=headers)
+            resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 200:
                 data = resp.json().get('data', {})
 
@@ -166,7 +166,7 @@ async def fetch_proxmox_data():
             url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/rrddata?timeframe=hour"
             resp = None
             try:
-                resp = requests.get(url, headers=headers)
+                resp = requests.get(url, headers=headers, timeout=10)
                 if resp.status_code == 200:
                     rrd_data = resp.json().get('data', [])
                     if rrd_data:
@@ -188,7 +188,7 @@ async def fetch_proxmox_data():
         url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/qemu"
         resp = None
         try:
-            resp = requests.get(url, headers=headers)
+            resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 200:
                 vms = resp.json().get('data', [])
                 _metrics['vm_total'] = len(vms)
@@ -201,7 +201,7 @@ async def fetch_proxmox_data():
         url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/lxc"
         resp = None
         try:
-            resp = requests.get(url, headers=headers)
+            resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 200:
                 lxcs = resp.json().get('data', [])
                 _metrics['lxc_total'] = len(lxcs)
@@ -641,7 +641,7 @@ async def on_boot(apm):
 
 async def on_start():
     """App lifecycle: Called when user enters app"""
-    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD
+    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD, _last_fetch_time
     
     # Reload settings every time app starts (in case user changed them via web UI)
     if _app_mgr:
@@ -699,7 +699,8 @@ async def on_start():
     
     # Fetch initial data in background (non-blocking so UI appears instantly)
     await fetch_proxmox_data()
-    
+    _last_fetch_time = utime.time()  # avoid an immediate duplicate fetch on the next foreground tick
+
     # Update UI with fresh data
     show_current_page()
 

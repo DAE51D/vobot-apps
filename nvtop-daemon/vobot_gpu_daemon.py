@@ -21,6 +21,11 @@ PORT = 8039
 NVIDIA_SMI = "nvidia-smi"
 SUBPROCESS_TIMEOUT = 5
 
+# Stamped at deploy time from `git rev-parse --short HEAD` (see README's deploy
+# steps) so /api/gpu-data tells you exactly which commit is running on the
+# host -- catches the "did I actually redeploy after that change?" mistake.
+GIT_COMMIT = "unknown"
+
 QUERY_FIELDS = [
     "index", "name", "uuid", "driver_version",
     "temperature.gpu", "utilization.gpu", "utilization.memory",
@@ -237,13 +242,22 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 gpus = query_gpus()
                 processes = query_processes(gpus)
-                self._json(200, {"gpus": gpus, "processes": processes, "timestamp": time.time()})
+                self._json(200, {
+                    "gpus": gpus,
+                    "processes": processes,
+                    "timestamp": time.time(),
+                    "git_commit": GIT_COMMIT,
+                })
             except Exception as exc:
-                self._json(500, {"error": str(exc)})
+                self._json(500, {"error": str(exc), "git_commit": GIT_COMMIT})
         elif self.path == "/health":
-            self._json(200, {"status": "ok"})
+            self._json(200, {"status": "ok", "git_commit": GIT_COMMIT})
         elif self.path == "/":
-            self._json(200, {"service": "vobot-gpu-daemon", "endpoints": ["/api/gpu-data", "/health"]})
+            self._json(200, {
+                "service": "vobot-gpu-daemon",
+                "endpoints": ["/api/gpu-data", "/health"],
+                "git_commit": GIT_COMMIT,
+            })
         else:
             self._json(404, {"error": "not found"})
 

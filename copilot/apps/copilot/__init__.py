@@ -11,7 +11,7 @@ except Exception:
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "copilot"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 __version__ = VERSION
 ICON = "A:apps/copilot/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
@@ -853,7 +853,7 @@ async def on_boot(apm):
 
 
 async def on_start():
-    global _scr, _current_page
+    global _scr, _current_page, _last_fetch_time
 
     if _app_mgr:
         _load_settings(_app_mgr.config())
@@ -881,6 +881,7 @@ async def on_start():
     _set_dot('c_orange')
     await _yield_for_paint()
     ok = await fetch_all()
+    _last_fetch_time = utime.time()  # avoid an immediate duplicate fetch on the next foreground tick
     _set_dot('c_green' if ok else 'c_red')
     _dot_hide_at = utime.time() + 1.5
     _update_all_pages()
