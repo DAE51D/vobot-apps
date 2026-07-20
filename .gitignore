@@ -32,3 +32,6 @@ Thumbs.db
 /*.zip
 /*.url
 /.venv
+.claude/settings.json
+.specstory/cli/config.toml
+.specstory/statistics.json

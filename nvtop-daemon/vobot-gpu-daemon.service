@@ -1,0 +1,17 @@
+[Unit]
+Description=Vobot GPU Monitor Daemon (nvidia-smi JSON API for Mini Dock nvtop app)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/vobot-gpu-daemon/vobot_gpu_daemon.py
+Restart=on-failure
+RestartSec=3
+User=nobody
+Group=nogroup
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
