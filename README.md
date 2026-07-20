@@ -18,6 +18,17 @@ vobot-apps/
 │   ├── apps/
 │   │   └── proxmox/        # app package for device
 │   └── *.jpg               # screenshots
+├── nvtop/                   # nvtop (NVIDIA GPU monitor) project folder
+│   ├── apps/
+│   │   └── nvtop/           # app package for device
+│   └── *.jpg                # screenshots
+├── nvtop-daemon/             # companion Linux daemon nvtop polls (not on-device)
+│   ├── vobot_gpu_daemon.py
+│   └── vobot-gpu-daemon.service
+├── copilot/                  # GitHub Copilot billing dashboard project folder
+│   ├── apps/
+│   │   └── copilot/          # app package for device
+│   └── *.jpg                 # screenshots
 ├── .venv/                   # workspace-level Python venv
 ├── .github/
 │   ├── copilot-instructions.md
@@ -27,7 +38,9 @@ vobot-apps/
 
 ## Apps
 
-Both apps are enabled for "App Auto-Switch" under "Settings > Miscellaneous". 
+All apps are enabled for "App Auto-Switch" under "Settings > Miscellaneous".
+
+Every on-device app exposes a `GIT_COMMIT` build stamp (short git SHA, set at deploy time). `nvtop` and `proxmox` surface it on their dedicated Details/debug pages; `ntfy` and `copilot` keep their UI uncluttered and only print it to the serial log on boot.
 
 ### ntfy
 
@@ -40,11 +53,11 @@ A notification viewer for self-hosted ntfy servers. Displays push notifications 
 - Automatic periodic fetching
 - Timestamped messages
 
-See [ntfy/apps/ntfy/README.md](ntfy/README.md) for details.
+See [ntfy/README.md](ntfy/README.md) for details.
 
 ### proxmox
 
-A two-page Proxmox dashboard showing CPU/RAM arcs, network in/out bars with arrows, and VM/LXC counts; includes a text debug page (uptime, swap, disk, metrics).
+A two-page Proxmox dashboard showing CPU/RAM arcs, network in/out bars with arrows, and VM/LXC counts; includes a text debug page (uptime, swap, disk, metrics, app version/commit).
 
 **Features:**
 - Rotary wheel navigation between dashboard and debug pages
@@ -52,6 +65,27 @@ A two-page Proxmox dashboard showing CPU/RAM arcs, network in/out bars with arro
 - Polls Proxmox every 10 seconds; shows uptime/swap/disk on debug page
 
 See [proxmox/README.md](proxmox/README.md) for details.
+
+### nvtop
+
+A live NVIDIA GPU monitor (utilization, memory, temperature, power, clocks, top processes) sourced from our own companion daemon (`nvtop-daemon/`) running on whatever Linux box actually has the GPU.
+
+**Features:**
+- 4-page UI: Gauges, History (with 25/50/75% gridlines), Details (clocks/PCIe/throttle + daemon & app build commit), Processes
+- Processes page shows full CLI args per process, one flag per line, with its own encoder-scroll mode (press ENTER to toggle)
+- Gauges/History auto-cycle; Details/Processes are manual-only detours
+
+See [nvtop/README.md](nvtop/README.md) for the app and [nvtop-daemon/README.md](nvtop-daemon/README.md) for the companion daemon (not a Vobot app — runs on the GPU host).
+
+### copilot
+
+A GitHub Copilot billing dashboard — spend/savings/credits gauges, daily usage charts, and a billing-cycle countdown, pulled from GitHub's REST billing API via a read-only fine-grained PAT.
+
+**Features:**
+- 3-page UI: Gauges, Charts (daily + cumulative), Reset countdown
+- ENTER forces an immediate refresh
+
+See [copilot/README.md](copilot/README.md) for details.
 
 ## Vobot Mini Dock Platform
 
@@ -197,4 +231,4 @@ git status
 
 ---
 
-**Last Updated:** December 17, 2025
+**Last Updated:** July 20, 2026

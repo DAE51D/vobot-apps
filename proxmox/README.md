@@ -12,8 +12,9 @@ Two pages: main dashboard with arcs/bars and a debug text page. Navigate with th
 - Two-page UI: arc/bars dashboard plus text debug page
 - CPU/RAM arcs, network in/out bars with arrows, VM/LXC count bars
 - Rotary encoder navigation (LEFT/RIGHT to switch pages)
-- Polls Proxmox every N seconds, shows swap/disk/uptime on debug page
+- Polls Proxmox every N seconds, shows swap/disk/uptime/app version+commit on debug page
 - LXC and VM threshold with red "alert" bar and how many computes are deficient
+- All `requests.get()` calls use a 10s timeout — a slow/unreachable Proxmox host can't freeze the whole device (this app makes 4 sequential HTTPS calls per poll, so this matters)
 
 > Note that this is doing a bunch of API calls and rendering a lot of widgets, so we're pushing what this little ESP32 can do.
 > There can be intermittent (noticable) lag when using the wheel/buttons. We've tried to optimize as best we could.
@@ -58,6 +59,8 @@ Configure via the web interface at http://192.168.1.32/apps/proxmox:
 
 ⚠️ **Note**: Developer mode must be enabled for Thonny to access the device filesystem and view debug logs.
 
+💡 **Good to know:** the Vobot's `urequests` doesn't validate TLS certificates at all (no chain check, no hostname check — confirmed by hitting `self-signed.badssl.com` and getting a clean `200`). That's why this app's `https://{PVE_HOST}` calls already work fine against Proxmox's default self-signed cert with no special handling — nothing to configure either way.
+
 ## Installation
 
 ```powershell
@@ -88,12 +91,13 @@ When in doubt, use Thonny's file view to upload the `proxmox` folder to `/apps/p
 
 ## Technical Details
 
-- **Version:** 1.0.0
+- **Version:** 1.0.3
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x (arcs/bars/labels; png arrows via `lv.img`)
 - **Dependencies:** urequests, ujson, utime
 - **Data:** Proxmox status and RRD endpoints (CPU, mem/swap/disk, net KB/s, VM/LXC counts)
 - **Polling:** 10 seconds
+- **Build tracking:** `GIT_COMMIT` is stamped at deploy time from `git rev-parse --short HEAD` and shown on the debug page as `App: <version> (<commit>)`
 
 ## Resources
 

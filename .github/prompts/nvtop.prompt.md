@@ -8,7 +8,7 @@ context: |
   - Our own daemon (built and deployed 2026-07-19): D:\daevid\Code\Vobot\nvtop-daemon\vobot_gpu_daemon.py + vobot-gpu-daemon.service, running on the Proxmox host at http://proxmox.home.lan:8039/api/gpu-data
   - Daemon README (deploy steps): D:\daevid\Code\Vobot\nvtop-daemon\README.md
   - gpu-hot project (reference/inspiration only, not a dependency): https://github.com/psalias2006/gpu-hot
-  - App source (built 2026-07-19, not yet deployed to device): D:\daevid\Code\Vobot\nvtop\apps\nvtop\__init__.py
+  - App source (built 2026-07-19, deployed and actively tested on-device, v1.0.3 as of 2026-07-20): D:\daevid\Code\Vobot\nvtop\apps\nvtop\__init__.py
   - App manifest: D:\daevid\Code\Vobot\nvtop\apps\nvtop\manifest.yml
   - App icon (generated placeholder, 48x48 PNG): D:\daevid\Code\Vobot\nvtop\apps\nvtop\resources\icon.png
 ---
@@ -28,7 +28,7 @@ The original open question was "do we need a small Linux service the Vobot reads
 - **Deployed 2026-07-19 on the Proxmox host itself** (bare metal, `proxmox.home.lan:8039`) — that's the box directly attached to the GPU (`NVIDIA GeForce RTX 5060 Ti`, `GPU-2bb45349-6461-e802-99c1-098bae63ad20`), and the simplest/closest-to-hardware place to run it. Installed as a systemd service (`vobot-gpu-daemon.service`, `enabled --now`), runs as `nobody` (verified `/dev/nvidia*` is world read/write on this host, no elevated privileges needed), auto-restarts on failure. Verified live: `curl http://proxmox.home.lan:8039/api/gpu-data` returns real GPU telemetry.
 - **Architecture is host-agnostic on purpose.** The daemon makes no assumption about being bare metal — it just calls whatever `nvidia-smi` resolves to locally, so the identical script would work unmodified in an LXC/VM with GPU passthrough (that's literally how `gpu-hot` does it in the `komodo` container) or on another physical Linux box. This matters because **not every future user of the Vobot app will have a bare-metal Proxmox+GPU box** — the daemon needs to run wherever *their* GPU actually lives.
 - **Out of scope for now, noted for later**: macOS and Windows 11 equivalents of this daemon (different data source than `nvidia-smi` — `powermetrics`/IOKit on macOS, `nvidia-smi.exe` or WMI on Windows). Don't build these yet; just don't paint the on-device app or the JSON schema into a Linux-only corner if it's easy to avoid.
-- **No process-table endpoint.** `nvtop`'s bottom pane (PID/USER/GPU/MEM/CPU/Command) isn't implemented in our daemon (nvidia-smi *can* report per-process GPU usage via `--query-compute-apps`, but there's no cheap way to get matching CPU%/host-mem/full-command without shelling out to `ps` per PID — deliberately left out to keep the daemon minimal). Use that screen real estate for clocks/PCIe/throttle detail instead (see Page 3 below). Revisit only if the user asks for it specifically.
+- **Process table: implemented (2026-07-20).** Originally left out (see history below), but we added it: the daemon's `query_processes()` shells out to `nvidia-smi --query-compute-apps=...` for `gpu_uuid,pid,process_name,used_memory`, then `ps -p <pids> -o pid=,%cpu=,rss=,comm=,args=` once for CPU%/full-command, and returns a `processes` dict (keyed by GPU index, same shape as `gpus`) alongside the `gpus` dict in `/api/gpu-data`. The app's Page 4 (Processes) renders the top 4 by GPU memory, each as `argv0` / `GPU/CPU/PID` / one CLI flag+value per line, with its own encoder-scroll mode (ENTER toggles; see `_process_scroll_mode` in `__init__.py`).
 
 ## Live response shape (`GET http://proxmox.home.lan:8039/api/gpu-data`)
 
@@ -79,7 +79,7 @@ Notes for parsing on-device:
 
 ## Goal — app structure
 
-A 3-page app (scroll wheel cycles pages manually; also auto-cycles every 5s like the reference `nvtop` capture unless the user is actively scrolling — reset the auto-cycle timer on manual input so it doesn't fight the user). `CAN_BE_AUTO_SWITCHED = True` for the dock's own app-rotation (separate concept from this in-app page auto-cycle — don't conflate the two timers).
+A 4-page app (scroll wheel cycles pages manually; Gauges/History also auto-cycle every 5s like the reference `nvtop` capture unless the user is actively scrolling — reset the auto-cycle timer on manual input so it doesn't fight the user; Details/Processes are manual-only detours that auto-cycle resumes from once you leave them — see `AUTO_CYCLE_PAGES` vs `NUM_PAGES`). `CAN_BE_AUTO_SWITCHED = True` for the dock's own app-rotation (separate concept from this in-app page auto-cycle — don't conflate the two timers).
 
 **Page 1 — Gauges (live snapshot)**
 - Arc: GPU utilization % (reuse proxmox app's arc pattern: rotation 270, bg angle 0–360, hidden knob)
@@ -93,11 +93,16 @@ A 3-page app (scroll wheel cycles pages manually; also auto-cycles every 5s like
 - Match the reference nvtop capture's ~60s rolling window: buffer size = `60s / poll_interval`, default poll 2s → 30 points (tune once battery/network impact on-device is observed; keep buffer small, this is a memory-constrained device)
 - Y axis 0–100 (both series are already percentages, so no dual-axis complexity needed here — simpler than the copilot app's bar+line overlay)
 
-**Page 3 — Details (replaces nvtop's process table, which isn't available from the API)**
+**Page 3 — Details**
 - Clocks: graphics/SM (`clock_graphics`/`clock_sm`) and memory (`clock_memory`), each with their `clock_max_*` as a "/max" suffix
 - Fan speed % (may read 0 at idle on this card — don't treat 0 as an error state)
 - PCIe: `pcie_gen`x`pcie_width` current, with `pcie_gen_max`x`pcie_width_max` as a dimmed "(max ...)" suffix
 - Performance state (`performance_state`, e.g. `P8`) and `throttle_reasons` (scrolling label if non-"None")
+- Daemon commit + app version/commit, so you can tell what's actually running on both ends
+
+**Page 4 — Processes** (added 2026-07-20, once the daemon grew a process-table endpoint — see the architecture note above)
+- Top processes by GPU memory (`_metrics['processes']`, currently top 4), each rendered as `argv0` / `GPU: x MiB  CPU: y%  PID: z` / one CLI flag+value per line, dashed rule between processes
+- ENTER toggles a content-scroll mode: the encoder scrolls the (often long) argument list instead of paging apps; ENTER or ESC exits back to normal paging. Auto-cycle is suppressed while scroll mode is active (see `_process_scroll_mode` guard in `on_running_foreground`) so it can't yank you back to page 0 mid-read.
 
 ## Web Settings (config page)
 
@@ -120,13 +125,17 @@ Same shape as the `proxmox` app's `urequests` fetch: minimal headers, `Connectio
 
 ## Implementation status
 
-**Built 2026-07-19** — `nvtop/apps/nvtop/__init__.py` + `manifest.yml` + a generated placeholder icon exist and match the structure above (3-page cycle, `get_settings_json()` fields, `vobot_gpu_daemon`-shaped fetch, page-cache pattern from the proxmox app, offline indicator label instead of blanking the UI on a failed fetch). Verified `python3 -m py_compile` clean; **not yet verified on-device** — no LVGL runtime to test against off-device, and MicroPython stdlib (`ujson` vs `json`, etc.) can differ subtly from CPython even when syntax checks pass.
+**Built 2026-07-19, stable and released as v1.0.0.** Extensively verified on-device since (v1.0.0 → v1.0.3 as of 2026-07-20): 4-page cycle including the new Processes page, encoder paging, the offline indicator, `lv.chart` line-series rendering, gauges/history/details/processes all confirmed live against real GPU load (not just near-idle numbers).
 
-**Blocked on device access, not on code** — the USB/serial connection is in use by the in-flight `copilot` app session. Do not upload/deploy until the user confirms that session has released COM4.
+**2026-07-20 hardening pass:**
+- Added `timeout=10` to the daemon fetch — its absence was traced (via live serial `Ctrl+C` during a device-wide freeze) to being able to hang the *entire* device indefinitely, not just this app, since MicroPython's event loop is single-threaded. See the `requests.get()` timeout note in `.github/copilot-instructions.md`.
+- Fixed a redundant double-fetch on every app entry (`on_start()`'s initial fetch wasn't syncing `_last_fetch_time`, so the next `on_running_foreground()` tick would immediately re-fetch).
+- Added `GIT_COMMIT` (stamped at deploy time) shown on the Details page alongside the daemon's own `git_commit` field, so both ends of the pipeline are traceable to a commit.
+- `lv_chart`'s built-in `set_div_line_count()` proved unreliable for the 25/50/75% gridlines (only the 50% line rendered) — replaced with explicit 1px `lv.obj` bars drawn as children of the chart at computed pixel offsets.
+- Added the Processes page (see Page 4 above) once the daemon grew a process-table endpoint.
 
-## Open items before device deploy/test
+## Open items
 
 - Icon: current `resources/icon.png` is a programmatically generated placeholder (green chip-with-pins glyph, matches the accent color used in the app) — swap for something nicer if desired, not blocking.
-- On-device verification needed once USB is free: encoder paging through all 3 tiles, the offline indicator (test via `ssh root@proxmox systemctl stop vobot-gpu-daemon` then `start` again), and that `lv.chart` line-series rendering looks right at this screen size (the copilot app's bar+line overlay was the only prior on-device chart validation — this app's plain 2-series line chart is a simpler case but still unverified).
-- Confirm actual field values (`utilization`, `memory_utilization`, etc.) render sensibly under real GPU load, not just the near-idle numbers seen during daemon testing.
 - Future, explicitly out of scope now: macOS/Windows 11 ports of the daemon for non-Proxmox users.
+- Not yet committed to git as of 2026-07-20 (device testing is ongoing, per repo convention of not committing until confirmed working) — commit once the user gives the go-ahead.

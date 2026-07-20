@@ -48,11 +48,13 @@ See the main [repository README](../README.md) for general setup and installatio
 
 Configure via the web interface at http://192.168.1.32/apps/ntfy:
 
-- **Server URL:** Your ntfy server (e.g., `http://ntfy.home.lan`)
+- **Server URL:** Your ntfy server (e.g., `http://ntfy.home.lan` or `https://ntfy.home.lan` — self-signed HTTPS works fine too, see note below)
 - **Topic(s):** Comma-separated topics (e.g., `general` or `alerts,builds`). ntfy requires at least one topic; wildcards/all-topics are not supported.
 - **Fetch Interval:** Polling frequency in seconds (2-120, default 10)
 - **Max Cached Messages:** Number of messages to store (1-20, default 5)
 - **Connection Mode:** Polling or Long-poll (SSE removed)
+
+💡 **Good to know:** if your ntfy server is set up for HTTPS with a self-signed cert, you can just use the `https://` URL directly — no extra config needed. The Vobot's `urequests` doesn't validate TLS certificates at all (no chain check, no hostname check — confirmed by hitting `self-signed.badssl.com` and getting a clean `200`), so self-signed HTTPS already works out of the box.
 
 To return to normal operation:
 
@@ -169,12 +171,13 @@ Optional headers:
 
 ## Technical Details
 
-- **Version:** 1.0.0
+- **Version:** 1.1.2
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 8.x
 - **Dependencies:** urequests, ujson, utime
 - **Default mode:** Long-poll (real-time, stable)
 - **Message cache:** Last `MAX_MESSAGES` messages (default 5, 24-hour window)
+- **Build tracking:** `GIT_COMMIT` is stamped at deploy time from `git rev-parse --short HEAD` and printed to the serial log on boot (not shown in the UI)
 
 ## Resources
 
@@ -230,5 +233,5 @@ In other words, YOLO. IDGAF what you do with this. Have fun. Make it better. Mak
 
 ---
 
-- **Version:** 1.0.0  
-- **Last Updated:** December 14, 2025
+- **Version:** 1.1.2
+- **Last Updated:** July 20, 2026

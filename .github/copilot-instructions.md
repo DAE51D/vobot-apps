@@ -222,6 +222,7 @@ socket.getaddrinfo("ntfy.home.lan", 80)
 - `urequests` - HTTP client library (MicroPython)
 - Network connectivity available for HTTP/HTTPS requests
 - Device must be connected to WiFi
+- **TLS certificates are not validated.** Confirmed live against `self-signed.badssl.com` — a plain `requests.get(url, timeout=10)` with no special handling returns `200` even against a deliberately self-signed cert. No chain check, no hostname check, nothing to pass to bypass it (there's no `verify=` kwarg either — `requests.get(..., verify=False)` raises `TypeError`, it's simply not needed). Point any app straight at an internal `https://` endpoint with a self-signed cert and it'll just work — this is why `proxmox`'s and `ntfy`'s HTTPS calls need no special cert handling.
 
 ### Example HTTP Request
 ```python
@@ -330,6 +331,11 @@ print(f"Message time: {local_time[3]}:{local_time[4]:02d}")
 - Page switching: rebuilding the page on change is safer than caching widgets if performance allows; avoid `_scr.clean()` on every dial tick—only rebuild when the page actually changes.
 - Uploads: on constrained flash, prefer single-file uploads (e.g., only `__init__.py`) when space is tight; Thonny file view is the most reliable fallback.
 - Autoswitch validation: ensure `CAN_BE_AUTO_SWITCHED = True` is exported by each app module and verify in serial logs under `APP_MGR: user app ... ['...','CAN_BE_AUTO_SWITCHED', ...]`.
+- Screen resolution: confirmed via serial boot log (`bsp_lcd: Screen name : [ST7789] | width : [320] | height : [240]`) — 320x240, matches `peripherals.screen.screen_resolution`.
+- **Always set `timeout=` on every `requests.get()` call.** MicroPython is single-threaded and cooperative — one blocking socket read with no timeout freezes the *entire* device (all apps, the system clock, the encoder) until the OS-level TCP timeout finally gives up, which can be minutes. This isn't per-app; it starves the whole shared event loop. Confirmed live via serial: `Ctrl+C` during a freeze showed the traceback sitting inside `urequests.py` `content()`/`json()` with no timeout set. `timeout=10` is the established convention here (see `ntfy`/`copilot`); apply it to every `requests.get()`, no exceptions.
+- Encoder-driven scrolling (`obj.scroll_by()`): use `lv.ANIM.OFF`, not `lv.ANIM.ON`. An animated scroll per encoder tick queues/eases and feels sluggish under rapid rotation — instant jumps track the wheel far better for this kind of repeated-small-increment input.
+- `lv.chart` div lines (`set_div_line_count(hdiv, vdiv)`) are unreliable on this firmware — only the middle line reliably rendered in testing, not the outer ones. For guaranteed gridlines, draw explicit thin `lv.obj` bars as **children of the chart widget** at computed pixel offsets instead (children of a chart draw on top of its internally-drawn bg/series regardless of add-order, so they're always visible).
+- Build/version stamping: `nvtop-daemon` and all four on-device apps expose a `GIT_COMMIT` constant (default `"unknown"`), stamped at deploy time from `git rev-parse --short HEAD` (`-dirty` suffix appended if the working tree differs from HEAD for that file) via a `(Get-Content ...) -replace` step before `ampy put`. This exists because we spent real debugging time once diagnosing "is this actually the code I think it is running on the device" — always stamp before deploying. Where to surface it depends on the app: if it already has a dedicated details/debug page (`nvtop`, `proxmox`), show it there. Don't add a new always-visible GUI element (e.g. a permanent corner label) just to fit it in on an app that doesn't have that kind of page (`ntfy`, `copilot`) — a `print()` in `on_boot()` is enough; it's a debugging aid, not a user-facing feature.
 
 ## Debugging Workflow
 
@@ -543,7 +549,7 @@ https://dock.myvobot.com/developer/guides/publishing-guide/manifest_file/
 - Whenever bumping a Python app version (e.g., `__version__ = "0.0.X"` in `apps/<app>/__init__.py`), **ALWAYS** bump `application.version` in `apps/<app>/manifest.yml` to keep the `/apps` page version accurate.
 - The version shown on /apps comes from `manifest.yml`, NOT from Python code.
 - Verify the `/apps` page shows the updated version after upload.
-- For coordinated release snapshots across multiple apps, keep both `__init__.py` and `manifest.yml` versions aligned to the agreed release version (current target: `1.0.1`).
+- Apps currently version independently (each bumped on its own changes, not synced to a shared release number). If a coordinated release snapshot is needed again, align `__init__.py` and `manifest.yml` versions across all apps to the agreed release version at that time.
 
 ### Best Practices
 - Use sensible defaults for all settings (e.g., default topic `general`; ntfy requires at least one topic, use comma-separated list for multiple)

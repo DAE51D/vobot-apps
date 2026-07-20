@@ -230,16 +230,13 @@ def set_mode_dot(busy):
 
 
 def refresh_footer_label():
-    """One footer line, rotating between the server host, the current channel/topic,
-    and the running build's git commit every FOOTER_ALT_INTERVAL seconds, instead of
-    squeezing all three into one row at once."""
+    """One footer line, alternating between the server host and the current channel/topic
+    every FOOTER_ALT_INTERVAL seconds, instead of squeezing both into one row at once."""
     if not footer_label:
         return
     try:
         if footer_state == 1 and messages and current_index < len(messages):
             text = messages[current_index].get('topic', '') or NTFY_TOPIC
-        elif footer_state == 2:
-            text = f"build {GIT_COMMIT}"
         else:
             host = NTFY_SERVER.rstrip("/") or NTFY_SERVER
             for prefix in ("https://", "http://"):
@@ -387,6 +384,7 @@ async def on_boot(apm):
     global app_mgr
     app_mgr = apm
     print(f"=== ntfy on_boot() === app_mgr: {app_mgr}")
+    print(f"ntfy: version={VERSION} commit={GIT_COMMIT}")
 
 
 async def on_start():
@@ -612,7 +610,7 @@ async def on_running_foreground():
     # occasional set_text).
     if now - footer_alt_time >= FOOTER_ALT_INTERVAL:
         footer_alt_time = now
-        footer_state = (footer_state + 1) % 3
+        footer_state = (footer_state + 1) % 2
         refresh_footer_label()
 
     # Throttled polling/long-poll timing

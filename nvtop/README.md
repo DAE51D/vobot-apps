@@ -6,13 +6,14 @@ A MicroPython NVIDIA GPU monitor for the Vobot Mini Dock.
 
 `nvtop` shows live GPU telemetry from a small companion REST service, `vobot-gpu-daemon`, running on the machine that actually has the NVIDIA GPU.
 
-The app currently provides a 3-page UI:
+The app currently provides a 4-page UI:
 
 - Gauges page with GPU, memory, temperature, and power/memory bars
-- History page with GPU and memory utilization trends
-- Details page with clocks, PCIe info, performance state, and throttle reasons
+- History page with GPU, memory-used, and memory-activity trend lines plus 25/50/75% gridlines
+- Details page with clocks, PCIe info, performance state, throttle reasons, and daemon/app build info
+- Processes page listing the top GPU-memory processes, with full command-line args and its own encoder-driven scroll mode
 
-Pages can auto-cycle and can also be changed with the Vobot rotary encoder.
+Gauges/History auto-cycle between themselves; Details/Processes are manual-only detours (auto-cycle resumes once you leave them). All pages can also be changed directly with the Vobot rotary encoder.
 
 ## Features
 
@@ -20,10 +21,12 @@ Pages can auto-cycle and can also be changed with the Vobot rotary encoder.
 - Live VRAM utilization gauge
 - Temperature gauge with hot-state color change
 - Power draw bar and memory usage bar
-- Rolling history chart for GPU and memory percent
-- Details page with clocks, PCIe link, P-state, and throttle reason text
+- Rolling history chart for GPU %, memory-used %, and memory-activity %, with 25/50/75% gridlines and a 0%/100% border
+- Details page with clocks, PCIe link, P-state, throttle reason text, and the daemon's + app's git commit (so you always know what's actually running)
+- Processes page: top GPU-memory processes, each showing `argv0`, `GPU/CPU/PID`, and every CLI flag on its own line, separated by a rule; press **ENTER** to toggle a content-scroll mode where the encoder scrolls the list instead of paging apps (press **ENTER** or **ESC** to exit back to normal paging)
 - Configurable polling interval and page auto-cycle
 - Works with multi-GPU hosts via configurable GPU index
+- All `requests.get()` calls use a 10s timeout — a slow/unreachable daemon can't freeze the whole device
 
 ## Screenshots
 
@@ -108,12 +111,13 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 
 ### Controls
 
-
-| Action                               | Function                    |
-| -------------------------------------- | ----------------------------- |
-| Rotate clockwise / counter-clockwise | Change pages                |
-| Wait                                 | Auto-cycle pages if enabled |
-| Press ESC                            | Exit app                    |
+| Action                                  | Function                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------- |
+| Rotate clockwise / counter-clockwise    | Change pages (or scroll the process list, in scroll mode)       |
+| Wait                                    | Auto-cycle between Gauges/History if enabled                    |
+| Press ENTER (on Processes page)         | Toggle content-scroll mode                                      |
+| Press ENTER or ESC (in scroll mode)     | Exit scroll mode, back to normal page navigation                |
+| Press ESC (not in scroll mode)          | Exit app                                                         |
 
 ### Pages
 
@@ -128,7 +132,9 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 #### History
 
 - GPU percent trend line
-- Memory percent trend line
+- Memory-used percent trend line
+- Memory-activity percent trend line
+- 25/50/75% horizontal gridlines, 0%/100% framed by the chart border
 
 #### Details
 
@@ -138,6 +144,20 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 - PCIe current and max link
 - Performance state
 - Throttle reasons
+- Daemon commit + app version/commit (`Daemon: <hash>  App: <version> (<hash>)`)
+
+#### Processes
+
+- Top GPU-memory processes (by default the top 4), each rendered as:
+  ```
+  /opt/llama-cpp/bin/llama-server
+  GPU: 5460 MiB   CPU: 1%   PID: 3237629
+  --foo bar
+  --fee fum
+  ```
+  (argv0, then a summary line, then every CLI flag with its value on its own line)
+- A dashed rule separates consecutive processes
+- Press **ENTER** to enter scroll mode (header turns blue, "ENTER/ESC to exit") — the encoder then scrolls the list instead of changing pages, so long argument lists are fully readable
 
 ## Troubleshooting
 
@@ -169,11 +189,12 @@ curl http://proxmox.home.lan:8039/api/gpu-data
 
 ## Technical Details
 
-- **Version:** 1.0.0
+- **Version:** 1.0.3
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL
 - **Dependencies:** `urequests`, `utime`, `lvgl`, `peripherals`
 - **Backend:** JSON API from `vobot-gpu-daemon`
+- **Build tracking:** `GIT_COMMIT` is stamped at deploy time from `git rev-parse --short HEAD` and shown on the Details page next to the daemon's own commit
 
 ## Resources
 

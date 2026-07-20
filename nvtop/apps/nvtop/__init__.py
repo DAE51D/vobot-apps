@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
@@ -27,7 +27,7 @@ AUTO_CYCLE_PAGES = 2
 
 PROCESS_HEADER_TEXT = "Processes (Top GPU Mem)"
 PROCESS_HEADER_SCROLL_TEXT = "Processes - ENTER/ESC to exit scroll"
-PROCESS_SCROLL_STEP = 40  # px per encoder click while scrolling the process list
+PROCESS_SCROLL_STEP = 60  # px per encoder click while scrolling the process list
 
 # Globals
 _scr = None
@@ -306,10 +306,12 @@ def event_handler(e):
             return
 
         if _process_scroll_mode and _current_page == 3:
+            # ANIM.OFF: an animated scroll per encoder click queues/eases and
+            # feels sluggish under rapid rotation - jump instantly instead.
             if e_key == lv.KEY.LEFT:
-                _ui['process_scroll'].scroll_by(0, -PROCESS_SCROLL_STEP, lv.ANIM.ON)
+                _ui['process_scroll'].scroll_by(0, -PROCESS_SCROLL_STEP, lv.ANIM.OFF)
             elif e_key == lv.KEY.RIGHT:
-                _ui['process_scroll'].scroll_by(0, PROCESS_SCROLL_STEP, lv.ANIM.ON)
+                _ui['process_scroll'].scroll_by(0, PROCESS_SCROLL_STEP, lv.ANIM.OFF)
             return
 
         old_page = _current_page
@@ -476,7 +478,7 @@ def _ensure_ui():
 
     hist_title_act = lv.label(page_history)
     hist_title_act.set_text("MEM Activity %")
-    hist_title_act.align(lv.ALIGN.TOP_MID, -5, 4)  # nudge left so it clears "MEM Used %"
+    hist_title_act.align(lv.ALIGN.TOP_MID, -20, 4)  # nudge left so it clears "MEM Used %"
     hist_title_act.set_style_text_color(_styles['c_blue'], 0)
 
     chart = lv.chart(page_history)
@@ -496,15 +498,26 @@ def _ensure_ui():
         chart.set_axis_range(lv.chart.AXIS.PRIMARY_Y, 0, 100)
     except Exception:
         chart.set_range(lv.chart.AXIS.PRIMARY_Y, 0, 100)
-    try:
-        # hdiv=3 draws 3 internal horizontal lines -> evenly splits 0-100 into
-        # the 25/50/75% marks; the border above adds the 0%/100% edges.
-        chart.set_div_line_count(3, 0)
-    except Exception:
-        pass
-    chart.set_style_line_color(_styles['c_gridline'], lv.PART.MAIN)
-    chart.set_style_line_width(1, lv.PART.MAIN)
-    chart.set_style_line_opa(lv.OPA.COVER, lv.PART.MAIN)
+
+    # lv_chart's own div lines (set_div_line_count) proved unreliable on this
+    # firmware -- only the 50% line ever rendered. Draw the 25/50/75% marks as
+    # explicit 1px bars instead, as children of the chart so they always paint
+    # on top of its background/series regardless of that quirk. The border
+    # above already frames the 0%/100% edges.
+    _chart_inset = 1 + 4  # border_width + pad_all, both sides
+    _plot_w = (_SCR_WIDTH - 4) - 2 * _chart_inset
+    _plot_h = (_SCR_HEIGHT - 27) - 2 * _chart_inset
+    for _pct in (25, 50, 75):
+        gridline = lv.obj(chart)
+        gridline.set_size(_plot_w, 1)
+        gridline.set_pos(_chart_inset, _chart_inset + int((100 - _pct) * _plot_h / 100))
+        gridline.set_style_bg_color(_styles['c_gridline'], lv.PART.MAIN)
+        gridline.set_style_bg_opa(lv.OPA.COVER, lv.PART.MAIN)
+        gridline.set_style_border_width(0, lv.PART.MAIN)
+        gridline.set_style_radius(0, lv.PART.MAIN)
+        gridline.clear_flag(lv.obj.FLAG.SCROLLABLE)
+        gridline.clear_flag(lv.obj.FLAG.CLICKABLE)
+
     util_series = chart.add_series(_styles['c_accent'], lv.chart.AXIS.PRIMARY_Y)
     mem_series = chart.add_series(_styles['c_orange'], lv.chart.AXIS.PRIMARY_Y)
     mem_act_series = chart.add_series(_styles['c_blue'], lv.chart.AXIS.PRIMARY_Y)
@@ -657,7 +670,7 @@ def _format_process_block(p):
     flag (with its value, if any) on its own line -- e.g.:
 
         /opt/llama-cpp/bin/llama-server
-        GPU: 5460 MiB   CPU: 1%   PID: 3237629
+        GPU: 5460 MiB / CPU: 1% / PID: 8675309
         --foo bar
         --fee fum
     """
@@ -685,7 +698,7 @@ def _format_process_block(p):
         arg_lines.append(cur)
 
     cpu_txt = f"{cpu:.0f}%" if isinstance(cpu, (int, float)) else "?"
-    lines = [argv0, f"GPU: {gm:.0f} MiB   CPU: {cpu_txt}   PID: {pid}"]
+    lines = [argv0, f"GPU: {gm:.0f} MiB / CPU: {cpu_txt} / PID: {pid}"]
     lines.extend(arg_lines)
     return "\n".join(lines)
 

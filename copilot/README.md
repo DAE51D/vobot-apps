@@ -157,12 +157,13 @@ Both charts use **gross** values (pre-discount), matching the gauges on page 1 �
 
 ## Technical Details
 
-- **Version:** 1.0.0
+- **Version:** 1.0.2
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL 9.1 (arcs, stacked bar+line charts, labels)
 - **Dependencies:** urequests, utime, clocktime
 - **Data:** GitHub REST Billing API — `settings/billing/usage/summary` (current-month aggregate) and `settings/billing/usage` (daily breakdown)
 - **Polling:** 30 minutes (configurable, 5–1440)
+- **Build tracking:** `GIT_COMMIT` is stamped at deploy time from `git rev-parse --short HEAD` and printed to the serial log on boot (not shown in the UI)
 
 ## Resources
 
