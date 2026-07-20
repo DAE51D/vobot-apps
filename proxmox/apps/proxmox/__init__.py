@@ -7,8 +7,9 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 __version__ = VERSION
+GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/proxmox/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
 
@@ -587,7 +588,8 @@ def _update_ui_for_current_page():
         if LXC_THRESHOLD > 0:
             lxc_line += f" [{LXC_THRESHOLD}]"
         lines.append(lxc_line)
-        
+        lines.append(f"App: {VERSION} ({GIT_COMMIT})")
+
         _ui['debug_label'].set_text("\n".join(lines))
 
 def show_debug_page():

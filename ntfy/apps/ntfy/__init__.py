@@ -13,8 +13,9 @@ try:
 except Exception:
     asyncio = None
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 __version__ = VERSION  # Expose version for web UI
+GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 NAME = "ntfy"
 # A file path or data (bytes type) of the logo image for this app.
 # If not specified, the default icon will be applied.
@@ -81,7 +82,7 @@ content_label = None
 scroll_mode = False  # ENTER toggles this: LEFT/RIGHT then scroll the message instead of paging
 mode_dot = None
 footer_label = None
-footer_showing_channel = False  # alternates footer_label between host and channel/topic
+footer_state = 0  # rotates footer_label: 0=host, 1=channel/topic, 2=build commit
 footer_alt_time = -999
 pager_dots = []  # up to PAGER_MAX small pill/dot widgets
 
@@ -229,13 +230,16 @@ def set_mode_dot(busy):
 
 
 def refresh_footer_label():
-    """One footer line, alternating between the server host and the current channel/topic
-    every FOOTER_ALT_INTERVAL seconds, instead of squeezing both into one row at once."""
+    """One footer line, rotating between the server host, the current channel/topic,
+    and the running build's git commit every FOOTER_ALT_INTERVAL seconds, instead of
+    squeezing all three into one row at once."""
     if not footer_label:
         return
     try:
-        if footer_showing_channel and messages and current_index < len(messages):
+        if footer_state == 1 and messages and current_index < len(messages):
             text = messages[current_index].get('topic', '') or NTFY_TOPIC
+        elif footer_state == 2:
+            text = f"build {GIT_COMMIT}"
         else:
             host = NTFY_SERVER.rstrip("/") or NTFY_SERVER
             for prefix in ("https://", "http://"):
@@ -599,15 +603,16 @@ async def on_running_foreground():
     """Called every ~200ms - fetch messages here, not on startup"""
     global last_fetch_time, messages, current_index, new_badge_time, last_time_seen
     global consecutive_failures, last_bounce_time, scroll_mode
-    global footer_showing_channel, footer_alt_time
+    global footer_state, footer_alt_time
 
     now = utime.time()
 
-    # Alternate the footer between host and channel on its own cadence, independent
-    # of the fetch throttle below (cheap: a time comparison plus an occasional set_text).
+    # Rotate the footer between host/channel/build commit on its own cadence,
+    # independent of the fetch throttle below (cheap: a time comparison plus an
+    # occasional set_text).
     if now - footer_alt_time >= FOOTER_ALT_INTERVAL:
         footer_alt_time = now
-        footer_showing_channel = not footer_showing_channel
+        footer_state = (footer_state + 1) % 3
         refresh_footer_label()
 
     # Throttled polling/long-poll timing

@@ -11,8 +11,9 @@ except Exception:
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "copilot"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 __version__ = VERSION
+GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/copilot/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
 
@@ -760,7 +761,14 @@ def _ensure_ui():
     busy_dot.clear_flag(lv.obj.FLAG.CLICKABLE)
     busy_dot.add_flag(lv.obj.FLAG.HIDDEN)
 
-    _ui = {'pages': page_containers, 'busy_dot': busy_dot}
+    # Tiny always-on build stamp so we can tell what's actually running on the
+    # device without pulling up a serial log.
+    build_label = lv.label(_scr)
+    build_label.set_text(GIT_COMMIT)
+    build_label.align(lv.ALIGN.BOTTOM_LEFT, 4, -2)
+    build_label.set_style_text_color(_styles['c_gray'], 0)
+
+    _ui = {'pages': page_containers, 'busy_dot': busy_dot, 'build_label': build_label}
     _ui.update(gauges)
     _ui.update(charts)
     _ui.update(progress)

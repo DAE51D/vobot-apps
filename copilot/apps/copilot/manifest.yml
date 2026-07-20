@@ -1,6 +1,6 @@
 application:
   name: copilot
-  version: 1.0.1
+  version: 1.0.2
   category: Utility
   icon: A:apps/copilot/resources/icon.png
   description: Monitor GitHub Copilot / billing spend with gauges, history charts, and a reset countdown

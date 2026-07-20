@@ -6,8 +6,9 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 __version__ = VERSION
+GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
 
@@ -24,12 +25,17 @@ HISTORY_POINTS = 30  # ~60s of history at the default 2s poll interval
 NUM_PAGES = 4
 AUTO_CYCLE_PAGES = 2
 
+PROCESS_HEADER_TEXT = "Processes (Top GPU Mem)"
+PROCESS_HEADER_SCROLL_TEXT = "Processes - ENTER/ESC to exit scroll"
+PROCESS_SCROLL_STEP = 40  # px per encoder click while scrolling the process list
+
 # Globals
 _scr = None
 _app_mgr = None
 _last_fetch_time = -999
 _last_page_cycle_time = -999
-_current_page = 0  # 0=gauges, 1=history chart, 2=details
+_current_page = 0  # 0=gauges, 1=history chart, 2=details, 3=processes
+_process_scroll_mode = False  # ENTER on page 3 toggles: encoder scrolls the arg list instead of paging apps
 _ui = None  # Cached LVGL widget references for fast updates/page switches
 _styles = None  # Cached LVGL styles to avoid recreating (and GC issues)
 _fetch_ok = False  # False until first successful fetch; drives OFFLINE indicator
@@ -256,6 +262,23 @@ async def fetch_gpu_data():
             resp.close()
 
 
+def _set_process_scroll_mode(active):
+    """Toggle between paging apps with the encoder and scrolling the process
+    list's text (long argv lists). Resets scroll position back to the top
+    whenever the mode is turned off, so re-entering it always starts fresh."""
+    global _process_scroll_mode
+    _process_scroll_mode = active
+    if _ui is None:
+        return
+    if active:
+        _ui['process_header'].set_text(PROCESS_HEADER_SCROLL_TEXT)
+        _ui['process_header'].set_style_text_color(_styles['c_blue'], 0)
+    else:
+        _ui['process_header'].set_text(PROCESS_HEADER_TEXT)
+        _ui['process_header'].set_style_text_color(_styles['c_accent'], 0)
+        _ui['process_scroll'].scroll_to(0, 0, lv.ANIM.OFF)
+
+
 def event_handler(e):
     """Handle encoder/button events"""
     global _current_page, _last_page_cycle_time
@@ -270,6 +293,25 @@ def event_handler(e):
 
     if e_code == lv.EVENT.KEY:
         e_key = e.get_key()
+
+        if e_key == lv.KEY.ENTER:
+            # Only the processes page has content worth scrolling in place.
+            if _current_page == 3:
+                _set_process_scroll_mode(not _process_scroll_mode)
+            return
+
+        if e_key == lv.KEY.ESC and _process_scroll_mode:
+            # Exit scroll mode instead of whatever ESC would otherwise do.
+            _set_process_scroll_mode(False)
+            return
+
+        if _process_scroll_mode and _current_page == 3:
+            if e_key == lv.KEY.LEFT:
+                _ui['process_scroll'].scroll_by(0, -PROCESS_SCROLL_STEP, lv.ANIM.ON)
+            elif e_key == lv.KEY.RIGHT:
+                _ui['process_scroll'].scroll_by(0, PROCESS_SCROLL_STEP, lv.ANIM.ON)
+            return
+
         old_page = _current_page
         if e_key == lv.KEY.LEFT:  # Scroll down = next page
             _current_page = (_current_page + 1) % NUM_PAGES
@@ -280,6 +322,8 @@ def event_handler(e):
             # Manual navigation resets the auto-cycle timer so it doesn't
             # immediately flip the page again out from under the user.
             _last_page_cycle_time = utime.time()
+            if old_page == 3:
+                _set_process_scroll_mode(False)  # leaving the page always resets scroll mode
             show_current_page()
 
 
@@ -432,7 +476,7 @@ def _ensure_ui():
 
     hist_title_act = lv.label(page_history)
     hist_title_act.set_text("MEM Activity %")
-    hist_title_act.align(lv.ALIGN.TOP_MID, -14, 4)  # nudge left so it clears "MEM Used %"
+    hist_title_act.align(lv.ALIGN.TOP_MID, -5, 4)  # nudge left so it clears "MEM Used %"
     hist_title_act.set_style_text_color(_styles['c_blue'], 0)
 
     chart = lv.chart(page_history)
@@ -478,19 +522,42 @@ def _ensure_ui():
     details_body.set_long_mode(lv.label.LONG.WRAP)
     details_body.set_width(_SCR_WIDTH - 12)
 
-    # --- Page 3: Processes ---
+    # --- Page 3: Processes. ENTER toggles content-scroll mode (encoder scrolls the
+    # arg list instead of paging apps); ESC or ENTER again exits back to page nav. ---
     process_header = lv.label(page_processes)
-    process_header.set_text("Processes")
+    process_header.set_text(PROCESS_HEADER_TEXT)
     process_header.align(lv.ALIGN.TOP_LEFT, 6, 4)
     process_header.set_style_text_color(_styles['c_accent'], 0)
     process_header.set_long_mode(lv.label.LONG.WRAP)
     process_header.set_width(_SCR_WIDTH - 12)
 
-    process_body = lv.label(page_processes)
-    process_body.align(lv.ALIGN.TOP_LEFT, 6, 28)
+    process_rule = lv.obj(page_processes)
+    process_rule.set_size(_SCR_WIDTH - 12, 2)
+    process_rule.align(lv.ALIGN.TOP_LEFT, 6, 24)
+    process_rule.set_style_bg_color(_styles['c_gridline'], lv.PART.MAIN)
+    process_rule.set_style_bg_opa(lv.OPA.COVER, lv.PART.MAIN)
+    process_rule.set_style_border_width(0, lv.PART.MAIN)
+    process_rule.set_style_radius(0, lv.PART.MAIN)
+    process_rule.clear_flag(lv.obj.FLAG.SCROLLABLE)
+    process_rule.clear_flag(lv.obj.FLAG.CLICKABLE)
+
+    process_scroll = lv.obj(page_processes)
+    process_scroll.set_pos(0, 30)
+    process_scroll.set_size(_SCR_WIDTH, _SCR_HEIGHT - 30)
+    process_scroll.set_style_bg_opa(0, lv.PART.MAIN)
+    process_scroll.set_style_border_width(0, lv.PART.MAIN)
+    process_scroll.set_style_pad_all(0, lv.PART.MAIN)
+    process_scroll.add_flag(lv.obj.FLAG.SCROLLABLE)
+    process_scroll.set_scroll_dir(lv.DIR.VER)
+    if hasattr(process_scroll, "set_scrollbar_mode"):
+        process_scroll.set_scrollbar_mode(lv.SCROLLBAR_MODE.AUTO)
+    process_scroll.clear_flag(lv.obj.FLAG.CLICKABLE)
+
+    process_body = lv.label(process_scroll)
+    process_body.align(lv.ALIGN.TOP_LEFT, 6, 2)
     process_body.set_style_text_color(_styles['c_white'], 0)
     process_body.set_long_mode(lv.label.LONG.WRAP)
-    process_body.set_width(_SCR_WIDTH - 12)
+    process_body.set_width(_SCR_WIDTH - 18)
 
     # --- Status overlay: shown on every page when the daemon is unreachable ---
     offline_label = lv.label(_scr)
@@ -521,6 +588,8 @@ def _ensure_ui():
         'details_header': details_header,
         'details_body': details_body,
         'process_header': process_header,
+        'process_rule': process_rule,
+        'process_scroll': process_scroll,
         'process_body': process_body,
         'offline_label': offline_label,
     }
@@ -581,6 +650,44 @@ def _fill_history_chart():
         _ui['chart'].set_value_by_id(_ui['mem_act_series'], i, mem_act_v)
     if hasattr(_ui['chart'], 'refresh'):
         _ui['chart'].refresh()
+
+
+def _format_process_block(p):
+    """Render one process as: argv0, a GPU/CPU/PID summary line, then each CLI
+    flag (with its value, if any) on its own line -- e.g.:
+
+        /opt/llama-cpp/bin/llama-server
+        GPU: 5460 MiB   CPU: 1%   PID: 3237629
+        --foo bar
+        --fee fum
+    """
+    pid = p.get('pid') or '?'
+    name = p.get('name') or '?'
+    gm = p.get('gpu_mem_mib') or 0
+    cpu = p.get('cpu_percent')
+    cmd = p.get('command') or name
+
+    tokens = cmd.split() if cmd else []
+    argv0 = tokens[0] if tokens else name
+
+    # Group each flag with its value(s): a new line starts at every "-"-prefixed
+    # token, and any following non-flag tokens are appended to that same line.
+    arg_lines = []
+    cur = None
+    for tok in tokens[1:]:
+        if tok.startswith('-'):
+            if cur is not None:
+                arg_lines.append(cur)
+            cur = tok
+        else:
+            cur = f"{cur} {tok}" if cur is not None else tok
+    if cur is not None:
+        arg_lines.append(cur)
+
+    cpu_txt = f"{cpu:.0f}%" if isinstance(cpu, (int, float)) else "?"
+    lines = [argv0, f"GPU: {gm:.0f} MiB   CPU: {cpu_txt}   PID: {pid}"]
+    lines.extend(arg_lines)
+    return "\n".join(lines)
 
 
 def _update_ui_for_current_page():
@@ -653,31 +760,18 @@ def _update_ui_for_current_page():
             f"PCIe: Gen{pcie_gen}x{pcie_width} (max Gen{pcie_gen_max}x{pcie_width_max})",
             f"State: {pstate}",
             f"Throttle: {throttle}",
-            f"Daemon: {daemon_commit}  App: {VERSION}",
+            f"Daemon: {daemon_commit}  App: {VERSION} ({GIT_COMMIT})",
         ]
         _ui['details_body'].set_text("\n".join(lines))
 
     else:  # page 3: processes
         procs = _metrics.get('processes') or []
-        _ui['process_header'].set_text("Processes (Top GPU Mem)")
         if not procs:
             _ui['process_body'].set_text("No process data from daemon")
         else:
-            lines = []
-            for p in procs:
-                pid = p.get('pid') or '?'
-                name = p.get('name') or '?'
-                gm = p.get('gpu_mem_mib') or 0
-                cpu = p.get('cpu_percent')
-                cmd = p.get('command') or name
-                if isinstance(cpu, (int, float)):
-                    lines.append(f"{name} (pid {pid})")
-                    lines.append(f"GPU {gm:.0f}MiB  CPU {cpu:.0f}%")
-                else:
-                    lines.append(f"{name} (pid {pid})")
-                    lines.append(f"GPU {gm:.0f}MiB")
-                lines.append(cmd[:38])
-            _ui['process_body'].set_text("\n".join(lines[:9]))
+            separator = "-" * 40
+            blocks = [_format_process_block(p) for p in procs]
+            _ui['process_body'].set_text(("\n" + separator + "\n").join(blocks))
 
 
 async def on_boot(apm):
@@ -689,10 +783,11 @@ async def on_boot(apm):
 
 async def on_start():
     """App lifecycle: Called when user enters app"""
-    global _scr, _current_page, _last_page_cycle_time, _last_fetch_time
+    global _scr, _current_page, _last_page_cycle_time, _last_fetch_time, _process_scroll_mode
 
     # Reload settings every time app starts (in case user changed them via web UI)
     _load_settings()
+    _process_scroll_mode = False  # always start on a fresh page-nav entry, not mid-scroll
 
     if not _scr:
         _scr = lv.obj()
@@ -758,7 +853,11 @@ async def on_running_foreground():
         await fetch_gpu_data()
         _update_ui_for_current_page()
 
-    if AUTO_CYCLE and now - _last_page_cycle_time >= PAGE_CYCLE_SECONDS:
+    if _process_scroll_mode:
+        # Keep deferring the auto-cycle deadline while actively reading a long
+        # arg list, otherwise it yanks you back to page 0 mid-scroll.
+        _last_page_cycle_time = now
+    elif AUTO_CYCLE and now - _last_page_cycle_time >= PAGE_CYCLE_SECONDS:
         _last_page_cycle_time = now
         if _current_page >= AUTO_CYCLE_PAGES:
             _current_page = 0
