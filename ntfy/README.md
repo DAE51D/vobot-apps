@@ -28,7 +28,7 @@ Displays push notifications from an ntfy server on your Vobot Mini Dock. Navigat
 <p align="center"><em>Web Setup Interface</em></p>
 </td>
 <td width="50%">
-<img src="./ntfy_critical_message.jpg" alt="Normal priority message" />
+<img src="./ntfy_1.1.0.png" alt="Normal priority message" />
 <p align="center"><em>Critical Priority (Red)</em></p>
 </td>
 </tr>
