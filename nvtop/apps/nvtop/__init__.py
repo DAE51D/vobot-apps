@@ -21,6 +21,8 @@ PAGE_CYCLE_SECONDS = 5  # seconds between auto page cycles
 AUTO_CYCLE = True
 
 HISTORY_POINTS = 30  # ~60s of history at the default 2s poll interval
+NUM_PAGES = 3
+AUTO_CYCLE_PAGES = 2
 
 # Globals
 _scr = None
@@ -219,9 +221,9 @@ def event_handler(e):
         e_key = e.get_key()
         old_page = _current_page
         if e_key == lv.KEY.LEFT:  # Scroll down = next page
-            _current_page = (_current_page + 1) % 3
+            _current_page = (_current_page + 1) % NUM_PAGES
         elif e_key == lv.KEY.RIGHT:  # Scroll up = previous page
-            _current_page = (_current_page - 1) % 3
+            _current_page = (_current_page - 1) % NUM_PAGES
 
         if _current_page != old_page:
             # Manual navigation resets the auto-cycle timer so it doesn't
@@ -273,8 +275,8 @@ def _make_page(parent):
 
 def _make_arc(parent, color):
     arc = lv.arc(parent)
-    arc.set_size(75, 75)
-    arc.align(lv.ALIGN.TOP_MID, 0, 0)
+    arc.set_size(102, 102)
+    arc.align(lv.ALIGN.TOP_MID, 0, 2)
     arc.set_range(0, 100)
     arc.set_bg_angles(0, 360)
     arc.set_rotation(270)
@@ -318,34 +320,31 @@ def _ensure_ui():
     tl = _make_tile(page_gauges, lv.ALIGN.TOP_LEFT, 2, 2, 155, 115)
     util_arc = _make_arc(tl, _styles['c_accent'])
     util_pct_label = lv.label(tl)
-    util_pct_label.align(lv.ALIGN.TOP_MID, 0, 18)
+    util_pct_label.align(lv.ALIGN.TOP_MID, 0, 28)
     util_pct_label.set_style_text_color(_styles['c_white'], 0)
     util_text_label = lv.label(tl)
     util_text_label.set_text("GPU")
-    util_text_label.align(lv.ALIGN.TOP_MID, 0, 36)
+    util_text_label.align(lv.ALIGN.TOP_MID, 0, 48)
     util_text_label.set_style_text_color(_styles['c_accent'], 0)
 
     tr = _make_tile(page_gauges, lv.ALIGN.TOP_RIGHT, -2, 2, 155, 115)
     mem_arc = _make_arc(tr, _styles['c_accent'])
     mem_pct_label = lv.label(tr)
-    mem_pct_label.align(lv.ALIGN.TOP_MID, 0, 18)
+    mem_pct_label.align(lv.ALIGN.TOP_MID, 0, 28)
     mem_pct_label.set_style_text_color(_styles['c_white'], 0)
     mem_text_label = lv.label(tr)
     mem_text_label.set_text("MEM")
-    mem_text_label.align(lv.ALIGN.TOP_MID, 0, 36)
+    mem_text_label.align(lv.ALIGN.TOP_MID, 0, 48)
     mem_text_label.set_style_text_color(_styles['c_accent'], 0)
-    mem_detail_label = lv.label(tr)
-    mem_detail_label.align(lv.ALIGN.BOTTOM_MID, 0, 1)
-    mem_detail_label.set_style_text_color(_styles['c_gray'], 0)
 
     bl = _make_tile(page_gauges, lv.ALIGN.BOTTOM_LEFT, 2, -2, 155, 118)
     temp_arc = _make_arc(bl, _styles['c_accent'])
     temp_pct_label = lv.label(bl)
-    temp_pct_label.align(lv.ALIGN.TOP_MID, 0, 18)
+    temp_pct_label.align(lv.ALIGN.TOP_MID, 0, 28)
     temp_pct_label.set_style_text_color(_styles['c_white'], 0)
     temp_text_label = lv.label(bl)
     temp_text_label.set_text("TEMP")
-    temp_text_label.align(lv.ALIGN.TOP_MID, 0, 36)
+    temp_text_label.align(lv.ALIGN.TOP_MID, 0, 48)
     temp_text_label.set_style_text_color(_styles['c_accent'], 0)
 
     br = _make_tile(page_gauges, lv.ALIGN.BOTTOM_RIGHT, -2, -2, 155, 118)
@@ -357,14 +356,14 @@ def _ensure_ui():
     power_bar.align(lv.ALIGN.TOP_LEFT, 10, 28)
     power_bar.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
     power_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
-    fan_label = lv.label(br)
-    fan_label.align(lv.ALIGN.TOP_LEFT, 6, 52)
-    fan_label.set_style_text_color(_styles['c_white'], 0)
-    fan_bar = lv.bar(br)
-    fan_bar.set_size(135, 12)
-    fan_bar.align(lv.ALIGN.TOP_LEFT, 10, 76)
-    fan_bar.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
-    fan_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
+    mem_usage_label = lv.label(br)
+    mem_usage_label.align(lv.ALIGN.TOP_LEFT, 6, 52)
+    mem_usage_label.set_style_text_color(_styles['c_white'], 0)
+    mem_usage_bar = lv.bar(br)
+    mem_usage_bar.set_size(135, 12)
+    mem_usage_bar.align(lv.ALIGN.TOP_LEFT, 10, 76)
+    mem_usage_bar.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
+    mem_usage_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
 
     # --- Page 1: History chart ---
     hist_title_util = lv.label(page_history)
@@ -378,8 +377,8 @@ def _ensure_ui():
     hist_title_mem.set_style_text_color(_styles['c_orange'], 0)
 
     chart = lv.chart(page_history)
-    chart.set_pos(2, 20)
-    chart.set_size(_SCR_WIDTH - 4, _SCR_HEIGHT - 22)
+    chart.set_pos(2, 25)
+    chart.set_size(_SCR_WIDTH - 4, _SCR_HEIGHT - 27)
     chart.clear_flag(lv.obj.FLAG.SCROLLABLE)
     chart.clear_flag(lv.obj.FLAG.CLICKABLE)
     chart.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
@@ -388,7 +387,10 @@ def _ensure_ui():
     chart.set_style_pad_all(4, lv.PART.MAIN)
     chart.set_type(lv.chart.TYPE.LINE)
     chart.set_point_count(HISTORY_POINTS)
-    chart.set_axis_range(lv.chart.AXIS.PRIMARY_Y, 0, 100)
+    try:
+        chart.set_axis_range(lv.chart.AXIS.PRIMARY_Y, 0, 100)
+    except Exception:
+        chart.set_range(lv.chart.AXIS.PRIMARY_Y, 0, 100)
     try:
         chart.set_div_line_count(3, 0)
     except Exception:
@@ -396,7 +398,7 @@ def _ensure_ui():
     util_series = chart.add_series(_styles['c_accent'], lv.chart.AXIS.PRIMARY_Y)
     mem_series = chart.add_series(_styles['c_orange'], lv.chart.AXIS.PRIMARY_Y)
 
-    # --- Page 2: Details (clocks / fan / PCIe / throttle - no process table, see prompt doc) ---
+    # --- Page 2: Details ---
     details_header = lv.label(page_details)
     details_header.align(lv.ALIGN.TOP_LEFT, 6, 4)
     details_header.set_style_text_color(_styles['c_accent'], 0)
@@ -404,7 +406,7 @@ def _ensure_ui():
     details_header.set_width(_SCR_WIDTH - 12)
 
     details_body = lv.label(page_details)
-    details_body.align(lv.ALIGN.TOP_LEFT, 6, 34)
+    details_body.align(lv.ALIGN.TOP_LEFT, 6, 54)
     details_body.set_style_text_color(_styles['c_white'], 0)
     details_body.set_long_mode(lv.label.LONG.WRAP)
     details_body.set_width(_SCR_WIDTH - 12)
@@ -424,13 +426,12 @@ def _ensure_ui():
         'util_pct_label': util_pct_label,
         'mem_arc': mem_arc,
         'mem_pct_label': mem_pct_label,
-        'mem_detail_label': mem_detail_label,
         'temp_arc': temp_arc,
         'temp_pct_label': temp_pct_label,
         'power_label': power_label,
         'power_bar': power_bar,
-        'fan_label': fan_label,
-        'fan_bar': fan_bar,
+        'mem_usage_label': mem_usage_label,
+        'mem_usage_bar': mem_usage_bar,
         'chart': chart,
         'util_series': util_series,
         'mem_series': mem_series,
@@ -438,6 +439,10 @@ def _ensure_ui():
         'details_body': details_body,
         'offline_label': offline_label,
     }
+
+    # Start with only the gauges page visible to avoid initial page overlap.
+    _ui['page_history'].add_flag(lv.obj.FLAG.HIDDEN)
+    _ui['page_details'].add_flag(lv.obj.FLAG.HIDDEN)
 
 
 def _set_page_visible(page_index):
@@ -450,6 +455,8 @@ def _set_page_visible(page_index):
 
     pages = (_ui['page_gauges'], _ui['page_history'], _ui['page_details'])
     for i, page in enumerate(pages):
+        if page is None:
+            continue
         if i == page_index:
             page.clear_flag(lv.obj.FLAG.HIDDEN)
         else:
@@ -488,15 +495,14 @@ def _update_ui_for_current_page():
         temp = int(_metrics['temp'])
         power_draw = float(_metrics['power_draw'])
         power_limit = float(_metrics['power_limit'])
-        fan = int(_metrics['fan'])
+        mem_used_gb = _metrics['mem_used_gb']
+        mem_total_gb = _metrics['mem_total_gb']
 
         _ui['util_arc'].set_value(util)
         _ui['util_pct_label'].set_text(f"{util}%")
 
         _ui['mem_arc'].set_value(mem_pct)
         _ui['mem_pct_label'].set_text(f"{mem_pct}%")
-        _ui['mem_detail_label'].set_text(
-            f"{_metrics['mem_used_gb']:.1f}/{_metrics['mem_total_gb']:.1f}G")
 
         _ui['temp_arc'].set_value(min(100, temp))
         _ui['temp_pct_label'].set_text(f"{temp}C")
@@ -507,8 +513,8 @@ def _update_ui_for_current_page():
         _ui['power_label'].set_text(f"Power: {power_draw:.0f}/{power_limit:.0f}W")
         _ui['power_bar'].set_value(min(100, power_pct), lv.ANIM.OFF)
 
-        _ui['fan_label'].set_text(f"Fan: {fan}%")
-        _ui['fan_bar'].set_value(min(100, fan), lv.ANIM.OFF)
+        _ui['mem_usage_label'].set_text(f"Mem: {mem_used_gb:.1f}/{mem_total_gb:.1f}G")
+        _ui['mem_usage_bar'].set_value(min(100, mem_pct), lv.ANIM.OFF)
 
     elif _current_page == 1:
         _fill_history_chart()
@@ -518,14 +524,25 @@ def _update_ui_for_current_page():
         driver = _metrics['driver'] or "?"
         _ui['details_header'].set_text(f"{name}\nDriver {driver}")
 
+        clock_gfx = _metrics['clock_gfx']
+        clock_gfx_max = _metrics['clock_gfx_max']
+        clock_mem = _metrics['clock_mem']
+        clock_mem_max = _metrics['clock_mem_max']
+        fan_pct = _metrics['fan']
+        pcie_gen = _metrics['pcie_gen']
+        pcie_width = _metrics['pcie_width']
+        pcie_gen_max = _metrics['pcie_gen_max']
+        pcie_width_max = _metrics['pcie_width_max']
+        pstate = _metrics['pstate']
+        throttle = _metrics['throttle']
+
         lines = [
-            f"Clock GFX: {_metrics['clock_gfx']}/{_metrics['clock_gfx_max']} MHz",
-            f"Clock MEM: {_metrics['clock_mem']}/{_metrics['clock_mem_max']} MHz",
-            f"Fan: {_metrics['fan']}%",
-            f"PCIe: Gen{_metrics['pcie_gen']}x{_metrics['pcie_width']} "
-            f"(max Gen{_metrics['pcie_gen_max']}x{_metrics['pcie_width_max']})",
-            f"State: {_metrics['pstate']}",
-            f"Throttle: {_metrics['throttle']}",
+            f"Clock GFX: {clock_gfx}/{clock_gfx_max} MHz",
+            f"Clock MEM: {clock_mem}/{clock_mem_max} MHz",
+            f"Fan: {fan_pct}%",
+            f"PCIe: Gen{pcie_gen}x{pcie_width} (max Gen{pcie_gen_max}x{pcie_width_max})",
+            f"State: {pstate}",
+            f"Throttle: {throttle}",
         ]
         _ui['details_body'].set_text("\n".join(lines))
 
@@ -598,5 +615,8 @@ async def on_running_foreground():
 
     if AUTO_CYCLE and now - _last_page_cycle_time >= PAGE_CYCLE_SECONDS:
         _last_page_cycle_time = now
-        _current_page = (_current_page + 1) % 3
+        if _current_page >= AUTO_CYCLE_PAGES:
+            _current_page = 0
+        else:
+            _current_page = (_current_page + 1) % AUTO_CYCLE_PAGES
         show_current_page()
