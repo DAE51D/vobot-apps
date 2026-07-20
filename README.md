@@ -203,6 +203,7 @@ while($port.IsOpen) {
 - [Official Vobot Apps Repository](https://github.com/myvobot/dock-mini-apps)
 - [User Forum](https://discuss.myvobot.com/)
 - [Vobot Mini Dock Simulator](https://dock.myvobot.com/developer/mini_dock_emulator/)
+- [Vobot Mini Dock App Skill](https://dock.myvobot.com/developer/guides/app-skill/#what-the-skill-helps-with)
 
 ## Publishing
 
