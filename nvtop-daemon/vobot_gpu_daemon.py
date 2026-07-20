@@ -40,6 +40,10 @@ THROTTLE_FIELDS = [
 ]
 THROTTLE_LABELS = ["HW Slowdown", "SW Power Cap", "HW Thermal", "SW Thermal"]
 
+PROCESS_FIELDS = [
+    "gpu_uuid", "pid", "process_name", "used_memory",
+]
+
 
 def _num(raw):
     """CSV cell -> float, or None for N/A, or the raw string if not numeric."""
@@ -113,6 +117,106 @@ def query_gpus():
     return gpus
 
 
+def _read_pid_stats(pids):
+    """Return per-PID cpu/rss/cmd metadata from ps when available."""
+    if not pids:
+        return {}
+    try:
+        pid_arg = ",".join(str(pid) for pid in sorted(set(pids)))
+        out = subprocess.run(
+            ["ps", "-p", pid_arg, "-o", "pid=,%cpu=,rss=,comm=,args="],
+            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT, check=True,
+        ).stdout.strip()
+    except Exception:
+        return {}
+
+    stats = {}
+    for line in out.splitlines():
+        parts = line.strip().split(None, 4)
+        if len(parts) < 4:
+            continue
+        pid = parts[0]
+        cpu = parts[1]
+        rss = parts[2]
+        comm = parts[3]
+        args = parts[4] if len(parts) > 4 else comm
+        try:
+            cpu_v = float(cpu)
+        except ValueError:
+            cpu_v = None
+        try:
+            rss_v = int(rss)
+        except ValueError:
+            rss_v = None
+        stats[pid] = {
+            "cpu_percent": cpu_v,
+            "rss_kib": rss_v,
+            "command": args,
+            "comm": comm,
+        }
+    return stats
+
+
+def query_processes(gpus):
+    """Return active GPU compute processes grouped by GPU index."""
+    uuid_to_index = {}
+    for idx, g in gpus.items():
+        uuid = g.get("uuid")
+        if uuid:
+            uuid_to_index[str(uuid)] = str(idx)
+
+    try:
+        out = subprocess.run(
+            [NVIDIA_SMI, "--query-compute-apps=" + ",".join(PROCESS_FIELDS), "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT, check=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        return {str(idx): [] for idx in gpus.keys()}
+
+    rows = []
+    pids = []
+    for line in out.splitlines():
+        vals = [v.strip() for v in line.split(",")]
+        if len(vals) < len(PROCESS_FIELDS):
+            continue
+        row = dict(zip(PROCESS_FIELDS, vals))
+        pid = row.get("pid", "")
+        if pid:
+            pids.append(pid)
+        rows.append(row)
+
+    pid_stats = _read_pid_stats(pids)
+    grouped = {str(idx): [] for idx in gpus.keys()}
+
+    for row in rows:
+        uuid = str(row.get("gpu_uuid") or "")
+        gpu_index = uuid_to_index.get(uuid)
+        if gpu_index is None and grouped:
+            gpu_index = next(iter(grouped.keys()))
+        if gpu_index is None:
+            continue
+
+        pid = str(row.get("pid") or "?")
+        proc_name = row.get("process_name") or "?"
+        used_mem = _num(row.get("used_memory", "0"))
+        if not isinstance(used_mem, (int, float)):
+            used_mem = 0.0
+
+        pstat = pid_stats.get(pid, {})
+        grouped[gpu_index].append({
+            "pid": pid,
+            "process_name": proc_name,
+            "used_memory": float(used_mem),
+            "cpu_percent": pstat.get("cpu_percent"),
+            "rss_kib": pstat.get("rss_kib"),
+            "command": pstat.get("command") or proc_name,
+        })
+
+    for idx, plist in grouped.items():
+        plist.sort(key=lambda p: p.get("used_memory", 0), reverse=True)
+    return grouped
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "VobotGPUDaemon/1.0"
 
@@ -132,7 +236,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/gpu-data":
             try:
                 gpus = query_gpus()
-                self._json(200, {"gpus": gpus, "timestamp": time.time()})
+                processes = query_processes(gpus)
+                self._json(200, {"gpus": gpus, "processes": processes, "timestamp": time.time()})
             except Exception as exc:
                 self._json(500, {"error": str(exc)})
         elif self.path == "/health":

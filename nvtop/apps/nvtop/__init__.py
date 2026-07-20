@@ -21,7 +21,7 @@ PAGE_CYCLE_SECONDS = 5  # seconds between auto page cycles
 AUTO_CYCLE = True
 
 HISTORY_POINTS = 30  # ~60s of history at the default 2s poll interval
-NUM_PAGES = 3
+NUM_PAGES = 4
 AUTO_CYCLE_PAGES = 2
 
 # Globals
@@ -35,11 +35,13 @@ _styles = None  # Cached LVGL styles to avoid recreating (and GC issues)
 _fetch_ok = False  # False until first successful fetch; drives OFFLINE indicator
 _hist_util = []
 _hist_mem = []
+_hist_mem_activity = []
 _metrics = {
     'name': '',
     'driver': '',
     'util': 0,
     'mem_pct': 0,
+    'mem_activity': 0,
     'mem_used_gb': 0.0,
     'mem_total_gb': 0.0,
     'temp': 0,
@@ -56,6 +58,7 @@ _metrics = {
     'pcie_width_max': '?',
     'pstate': '?',
     'throttle': 'None',
+    'processes': [],
 }
 
 
@@ -149,7 +152,7 @@ def _load_settings():
 
 async def fetch_gpu_data():
     """Fetch GPU telemetry from the configured daemon (vobot-gpu-daemon or gpu-hot)."""
-    global _metrics, _fetch_ok, _hist_util, _hist_mem
+    global _metrics, _fetch_ok, _hist_util, _hist_mem, _hist_mem_activity
 
     headers = {
         "Accept": "application/json",
@@ -176,9 +179,16 @@ async def fetch_gpu_data():
         _metrics['name'] = g.get('name') or _metrics['name']
         _metrics['driver'] = g.get('driver_version') or _metrics['driver']
         _metrics['util'] = int(g.get('utilization') or 0)
-        _metrics['mem_pct'] = int(g.get('memory_utilization') or 0)
-        _metrics['mem_used_gb'] = (g.get('memory_used') or 0) / 1024.0
-        _metrics['mem_total_gb'] = (g.get('memory_total') or 0) / 1024.0
+        mem_used_mib = float(g.get('memory_used') or 0)
+        mem_total_mib = float(g.get('memory_total') or 0)
+        if mem_total_mib > 0:
+            mem_pct_used = int((mem_used_mib * 100) / mem_total_mib)
+        else:
+            mem_pct_used = int(g.get('memory_utilization') or 0)
+        _metrics['mem_pct'] = max(0, min(100, mem_pct_used))
+        _metrics['mem_activity'] = int(g.get('memory_utilization') or 0)
+        _metrics['mem_used_gb'] = mem_used_mib / 1024.0
+        _metrics['mem_total_gb'] = mem_total_mib / 1024.0
         _metrics['temp'] = int(g.get('temperature') or 0)
         _metrics['power_draw'] = float(g.get('power_draw') or 0)
         _metrics['power_limit'] = float(g.get('power_limit') or 0)
@@ -194,12 +204,44 @@ async def fetch_gpu_data():
         _metrics['pstate'] = str(g.get('performance_state') or '?')
         _metrics['throttle'] = str(g.get('throttle_reasons') or 'None')
 
+        proc_payload = data.get('processes') or {}
+        selected = []
+        if isinstance(proc_payload, dict):
+            selected = proc_payload.get(GPU_INDEX)
+            if selected is None and proc_payload:
+                selected = list(proc_payload.values())[0]
+        elif isinstance(proc_payload, list):
+            selected = proc_payload
+
+        norm = []
+        if isinstance(selected, list):
+            for p in selected:
+                if not isinstance(p, dict):
+                    continue
+                pid = str(p.get('pid') or '?')
+                name = str(p.get('process_name') or p.get('name') or '?')
+                gpu_mem = float(p.get('used_memory') or p.get('gpu_memory') or p.get('gpu_mem_mib') or 0)
+                cpu = p.get('cpu_percent')
+                cmd = str(p.get('command') or p.get('cmd') or name)
+                norm.append({
+                    'pid': pid,
+                    'name': name,
+                    'gpu_mem_mib': gpu_mem,
+                    'cpu_percent': cpu,
+                    'command': cmd,
+                })
+        norm.sort(key=lambda item: item.get('gpu_mem_mib') or 0, reverse=True)
+        _metrics['processes'] = norm[:4]
+
         _hist_util.append(_metrics['util'])
         _hist_mem.append(_metrics['mem_pct'])
+        _hist_mem_activity.append(_metrics['mem_activity'])
         if len(_hist_util) > HISTORY_POINTS:
             _hist_util.pop(0)
         if len(_hist_mem) > HISTORY_POINTS:
             _hist_mem.pop(0)
+        if len(_hist_mem_activity) > HISTORY_POINTS:
+            _hist_mem_activity.pop(0)
 
         _fetch_ok = True
         return True
@@ -265,6 +307,7 @@ def _ensure_styles():
         'c_dark': lv.color_hex(0x404040),
         'c_accent': lv.color_hex(0x76B900),  # NVIDIA-ish green, matches the app icon
         'c_orange': lv.color_hex(0xFFA500),
+        'c_blue': lv.color_hex(0x58A6FF),
         'c_red': lv.color_hex(0xFF6B6B),
     }
 
@@ -309,7 +352,7 @@ def _make_tile(parent, align, x, y, w, h):
 
 
 def _ensure_ui():
-    """Build all 3 pages once and cache widget references.
+    """Build all pages once and cache widget references.
 
     Page switches become a cheap hide/show instead of scr.clean() + rebuild.
     """
@@ -322,6 +365,7 @@ def _ensure_ui():
     page_gauges = _make_page(_scr)
     page_history = _make_page(_scr)
     page_details = _make_page(_scr)
+    page_processes = _make_page(_scr)
 
     # --- Page 0: Gauges (2x2, same tile layout as the proxmox app) ---
     tl = _make_tile(page_gauges, lv.ALIGN.TOP_LEFT, 2, 2, 155, 115)
@@ -379,9 +423,14 @@ def _ensure_ui():
     hist_title_util.set_style_text_color(_styles['c_accent'], 0)
 
     hist_title_mem = lv.label(page_history)
-    hist_title_mem.set_text("MEM %")
+    hist_title_mem.set_text("MEM Used %")
     hist_title_mem.align(lv.ALIGN.TOP_RIGHT, -4, 4)
     hist_title_mem.set_style_text_color(_styles['c_orange'], 0)
+
+    hist_title_act = lv.label(page_history)
+    hist_title_act.set_text("MEM Activity %")
+    hist_title_act.align(lv.ALIGN.TOP_MID, 0, 4)
+    hist_title_act.set_style_text_color(_styles['c_blue'], 0)
 
     chart = lv.chart(page_history)
     chart.set_pos(2, 25)
@@ -404,6 +453,7 @@ def _ensure_ui():
         pass
     util_series = chart.add_series(_styles['c_accent'], lv.chart.AXIS.PRIMARY_Y)
     mem_series = chart.add_series(_styles['c_orange'], lv.chart.AXIS.PRIMARY_Y)
+    mem_act_series = chart.add_series(_styles['c_blue'], lv.chart.AXIS.PRIMARY_Y)
 
     # --- Page 2: Details ---
     details_header = lv.label(page_details)
@@ -418,6 +468,20 @@ def _ensure_ui():
     details_body.set_long_mode(lv.label.LONG.WRAP)
     details_body.set_width(_SCR_WIDTH - 12)
 
+    # --- Page 3: Processes ---
+    process_header = lv.label(page_processes)
+    process_header.set_text("Processes")
+    process_header.align(lv.ALIGN.TOP_LEFT, 6, 4)
+    process_header.set_style_text_color(_styles['c_accent'], 0)
+    process_header.set_long_mode(lv.label.LONG.WRAP)
+    process_header.set_width(_SCR_WIDTH - 12)
+
+    process_body = lv.label(page_processes)
+    process_body.align(lv.ALIGN.TOP_LEFT, 6, 28)
+    process_body.set_style_text_color(_styles['c_white'], 0)
+    process_body.set_long_mode(lv.label.LONG.WRAP)
+    process_body.set_width(_SCR_WIDTH - 12)
+
     # --- Status overlay: shown on every page when the daemon is unreachable ---
     offline_label = lv.label(_scr)
     offline_label.set_text("OFFLINE")
@@ -429,6 +493,7 @@ def _ensure_ui():
         'page_gauges': page_gauges,
         'page_history': page_history,
         'page_details': page_details,
+        'page_processes': page_processes,
         'util_arc': util_arc,
         'util_pct_label': util_pct_label,
         'mem_arc': mem_arc,
@@ -442,14 +507,18 @@ def _ensure_ui():
         'chart': chart,
         'util_series': util_series,
         'mem_series': mem_series,
+        'mem_act_series': mem_act_series,
         'details_header': details_header,
         'details_body': details_body,
+        'process_header': process_header,
+        'process_body': process_body,
         'offline_label': offline_label,
     }
 
     # Start with only the gauges page visible to avoid initial page overlap.
     _ui['page_history'].add_flag(lv.obj.FLAG.HIDDEN)
     _ui['page_details'].add_flag(lv.obj.FLAG.HIDDEN)
+    _ui['page_processes'].add_flag(lv.obj.FLAG.HIDDEN)
 
 
 def _set_page_visible(page_index):
@@ -460,7 +529,7 @@ def _set_page_visible(page_index):
     if _ui is None:
         return
 
-    pages = (_ui['page_gauges'], _ui['page_history'], _ui['page_details'])
+    pages = (_ui['page_gauges'], _ui['page_history'], _ui['page_details'], _ui['page_processes'])
     for i, page in enumerate(pages):
         if page is None:
             continue
@@ -473,14 +542,35 @@ def _set_page_visible(page_index):
 def _fill_history_chart():
     """Push the rolling util/mem history buffers into the Page 1 chart series."""
     n = len(_hist_util)
-    none_val = getattr(lv.chart, "POINT_NONE", getattr(lv, "CHART_POINT_NONE", 0))
+    if n <= 0:
+        for i in range(HISTORY_POINTS):
+            _ui['chart'].set_value_by_id(_ui['util_series'], i, 0)
+            _ui['chart'].set_value_by_id(_ui['mem_series'], i, 0)
+            _ui['chart'].set_value_by_id(_ui['mem_act_series'], i, 0)
+        if hasattr(_ui['chart'], 'refresh'):
+            _ui['chart'].refresh()
+        return
+
+    # Right-align history so newest points appear at the right edge.
+    pad = HISTORY_POINTS - n
     for i in range(HISTORY_POINTS):
-        if i < n:
-            _ui['chart'].set_value_by_id(_ui['util_series'], i, int(_hist_util[i]))
-            _ui['chart'].set_value_by_id(_ui['mem_series'], i, int(_hist_mem[i]))
+        src = i - pad
+        if src < 0:
+            util_v = int(_hist_util[0])
+            mem_v = int(_hist_mem[0])
+            mem_act_v = int(_hist_mem_activity[0]) if _hist_mem_activity else 0
         else:
-            _ui['chart'].set_value_by_id(_ui['util_series'], i, none_val)
-            _ui['chart'].set_value_by_id(_ui['mem_series'], i, none_val)
+            util_v = int(_hist_util[src])
+            mem_v = int(_hist_mem[src])
+            if src < len(_hist_mem_activity):
+                mem_act_v = int(_hist_mem_activity[src])
+            else:
+                mem_act_v = 0
+        _ui['chart'].set_value_by_id(_ui['util_series'], i, util_v)
+        _ui['chart'].set_value_by_id(_ui['mem_series'], i, mem_v)
+        _ui['chart'].set_value_by_id(_ui['mem_act_series'], i, mem_act_v)
+    if hasattr(_ui['chart'], 'refresh'):
+        _ui['chart'].refresh()
 
 
 def _update_ui_for_current_page():
@@ -526,7 +616,7 @@ def _update_ui_for_current_page():
     elif _current_page == 1:
         _fill_history_chart()
 
-    else:  # page 2: details
+    elif _current_page == 2:  # page 2: details
         name = _metrics['name'] or "GPU"
         driver = _metrics['driver'] or "?"
         _ui['details_header'].set_text(f"{name}\nDriver {driver}")
@@ -542,16 +632,40 @@ def _update_ui_for_current_page():
         pcie_width_max = _metrics['pcie_width_max']
         pstate = _metrics['pstate']
         throttle = _metrics['throttle']
+        mem_activity = _metrics['mem_activity']
 
         lines = [
             f"Clock GFX: {clock_gfx}/{clock_gfx_max} MHz",
             f"Clock MEM: {clock_mem}/{clock_mem_max} MHz",
             f"Fan: {fan_pct}%",
+            f"MEM Activity: {mem_activity}%",
             f"PCIe: Gen{pcie_gen}x{pcie_width} (max Gen{pcie_gen_max}x{pcie_width_max})",
             f"State: {pstate}",
             f"Throttle: {throttle}",
         ]
         _ui['details_body'].set_text("\n".join(lines))
+
+    else:  # page 3: processes
+        procs = _metrics.get('processes') or []
+        _ui['process_header'].set_text("Processes (Top GPU Mem)")
+        if not procs:
+            _ui['process_body'].set_text("No process data from daemon")
+        else:
+            lines = []
+            for p in procs:
+                pid = p.get('pid') or '?'
+                name = p.get('name') or '?'
+                gm = p.get('gpu_mem_mib') or 0
+                cpu = p.get('cpu_percent')
+                cmd = p.get('command') or name
+                if isinstance(cpu, (int, float)):
+                    lines.append(f"{name} (pid {pid})")
+                    lines.append(f"GPU {gm:.0f}MiB  CPU {cpu:.0f}%")
+                else:
+                    lines.append(f"{name} (pid {pid})")
+                    lines.append(f"GPU {gm:.0f}MiB")
+                lines.append(cmd[:38])
+            _ui['process_body'].set_text("\n".join(lines[:9]))
 
 
 async def on_boot(apm):
