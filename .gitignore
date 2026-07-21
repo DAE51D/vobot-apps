@@ -37,3 +37,4 @@ Thumbs.db
 
 # SpecStory chat transcripts can contain secrets pasted/echoed during sessions - never commit
 .specstory/
+.specstory/*

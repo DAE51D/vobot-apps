@@ -1,0 +1,54 @@
+{
+  "gpus": {
+    "0": {
+      "index": "0",
+      "name": "NVIDIA GeForce RTX 5060 Ti",
+      "uuid": "GPU-2bb45349-6461-e802-99c1-098bae63ad20",
+      "driver_version": "595.71.05",
+      "temperature": 38.0,
+      "utilization": 0.0,
+      "memory_utilization": 38.0,
+      "memory_used": 6092.0,
+      "memory_total": 16311.0,
+      "memory_free": 9751.0,
+      "power_draw": 5.38,
+      "power_limit": 180.0,
+      "fan_speed": 0.0,
+      "clock_graphics": 210.0,
+      "clock_sm": 210.0,
+      "clock_memory": 405.0,
+      "clock_max_graphics": 3120.0,
+      "clock_max_sm": 3120.0,
+      "clock_max_memory": 14001.0,
+      "pcie_gen": "1",
+      "pcie_gen_max": "3",
+      "pcie_width": "8",
+      "pcie_width_max": "16",
+      "performance_state": "P8",
+      "throttle_reasons": "None",
+      "timestamp": "2026-07-20T17:48:27"
+    }
+  },
+  "processes": {
+    "0": [
+      {
+        "pid": "3237629",
+        "process_name": "/opt/llama-cpp/bin/llama-server",
+        "used_memory": 5460.0,
+        "cpu_percent": 0.5,
+        "rss_kib": 5199752,
+        "command": "/opt/llama-cpp/bin/llama-server --cache-reuse 256 --chat-template-kwargs {\"enable_thinking\": false, \"preserve_thinking\": false} --host 127.0.0.1 --metrics --min-p 0.05 --no-mmap --port 35329 --presence-penalty 0.0 --reasoning-budget 0 --repeat-penalty 1.05 --sse-ping-interval 15 --temperature 0.2 --tools all --top-k 40 --top-p 0.9 --webui-config-file /root/systemd/llama-ui-mcp-config.json --webui-mcp-proxy --no-warmup --alias ornith-9b-q4km --batch-size 512 --ctx-size 32768 --cache-type-k q4_0 --cache-type-v q4_0 --flash-attn on --model /mnt/media/gguf/ornith-9b/ornith-1.0-9b-Q4_K_M.gguf --n-predict 4096 --n-gpu-layers 99 --parallel 1 --reasoning off --ubatch-size 128"
+      },
+      {
+        "pid": "109452",
+        "process_name": "/usr/lib/plexmediaserver/Plex Transcoder",
+        "used_memory": 608.0,
+        "cpu_percent": 25.4,
+        "rss_kib": 418952,
+        "command": "Transcoder /usr/lib/plexmediaserver/Plex Transcoder -codec:0 hevc -hwaccel:0 nvdec -threads:0 1 -hwaccel_output_format:0 cuda -hwaccel_device:0 cuda -codec:1 truehd_eae -eae_prefix:1 51mooz5rb5tr38zhyh28j8bs_ -ss 819 -analyzeduration 20000000 -probesize 20000000 -i /var/lib/plexmediaserver/MyTV/Fallout/Season 1/Fallout - S01E01 - The End Bluray-2160p Remux.mkv -start_at_zero -copyts -init_hw_device cuda=cuda:pci:0000:05:00.0 -filter_hw_device cuda -y -nostats -loglevel quiet -loglevel_plex error -progressurl http://127.0.0.1:32400/video/:/transcode/session/51mooz5rb5tr38zhyh28j8bs/131a2873-068a-4747-a7a2-2c129a4ed157/progress -map_inlineass 0:4 -filter_complex [0:0]hwupload[0];[0]scale_cuda=w=1280:h=720:format=p010[1];[1]hwdownload,format=p010[2];[2]inlineass=font_scale=1.000000:font_path=/usr/lib/plexmediaserver/Resources/Fonts/NotoSans-Medium.otf:fontconfig_file=/usr/lib/plexmediaserver/Resources/fonts.conf:language=en:overrides=ScaledBorderAndShadow\\\\\\=yes\\\\\\,FontName\\\\\\=Noto\\\\\\ Sans\\\\\\ Medium\\\\\\,Bold\\\\\\=500\\\\\\,PrimaryColour\\\\\\=&H00FFFFFF\\\\\\,OutlineColour\\\\\\=&H00020713\\\\\\,BackColour\\\\\\=&HCC000000:outline=2.6:shadow=1.7:font_size=54[3] -map [3] -metadata:s:0 language=eng -codec:0 hevc_nvenc -b:0 3319k -maxrate:0 3319k -bufsize:0 6638k -forced-idr:0 1 -r:0 23.975999999999999 -force_key_frames:0 expr:gte(t,n_forced*3) -bsf:0 dovi_rpu=strip=1 -filter_complex [0:1] aresample=async=1:ochl='5.1':rematrix_maxval=0.000000dB:osr=48000[4] -map [4] -metadata:s:1 language=eng -codec:1 aac -b:1 453k -f dash -seg_duration 3 -dash_segment_type mp4 -init_seg_name init-stream$RepresentationID$.m4s -media_seg_name chunk-stream$RepresentationID$-$Number%05d$.m4s -window_size 5 -delete_removed false -skip_to_segment 274 -manifest_name http://127.0.0.1:32400/video/:/transcode/session/51mooz5rb5tr38zhyh28j8bs/131a2873-068a-4747-a7a2-2c129a4ed157/manifest?X-Plex-Http-Pipeline=infinite -avoid_negative_ts disabled -map_metadata -1 -map_chapters -1 dash -map 0:4 -f null -codec ass nullfile"
+      }
+    ]
+  },
+  "timestamp": 1784594907.4024546,
+  "git_commit": "ddb5741-dirty"
+}

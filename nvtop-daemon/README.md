@@ -43,7 +43,7 @@ $Stamped = Join-Path $env:TEMP 'vobot_gpu_daemon.stamped.py'
 ssh root@proxmox "mkdir -p /opt/vobot-gpu-daemon"
 scp $Stamped root@proxmox:/opt/vobot-gpu-daemon/vobot_gpu_daemon.py
 scp vobot-gpu-daemon.service root@proxmox:/etc/systemd/system/
-ssh root@proxmox "systemctl daemon-reload && systemctl restart vobot-gpu-daemon"
+ssh root@proxmox "systemctl daemon-reload && systemctl enable --now vobot-gpu-daemon"
 curl http://proxmox.home.lan:8039/api/gpu-data
 ```
 
@@ -55,12 +55,32 @@ sed "s/^GIT_COMMIT = .*/GIT_COMMIT = \"$GIT_HASH\"/" vobot_gpu_daemon.py > /tmp/
 ssh root@proxmox "mkdir -p /opt/vobot-gpu-daemon"
 scp /tmp/vobot_gpu_daemon.stamped.py root@proxmox:/opt/vobot-gpu-daemon/vobot_gpu_daemon.py
 scp vobot-gpu-daemon.service root@proxmox:/etc/systemd/system/
-ssh root@proxmox "systemctl daemon-reload && systemctl restart vobot-gpu-daemon"
+ssh root@proxmox "systemctl daemon-reload && systemctl enable --now vobot-gpu-daemon"
 curl http://proxmox.home.lan:8039/api/gpu-data
 ```
 
+`systemctl enable --now` both starts the service immediately (equivalent to the old
+`restart`) and symlinks it into `multi-user.target.wants/`, which is what actually makes
+it survive a reboot — `WantedBy=multi-user.target` in the unit file alone does nothing
+until `enable` is run at least once. It's idempotent, so leaving it in every deploy is
+harmless and self-healing if someone ever disables the unit by hand.
+
+`Restart=always` (rather than `on-failure`) covers crashes *and* any clean-exit case
+(e.g. an uncaught exception that still returns 0, or someone fat-fingering a manual
+`kill` without `stop`) — for a daemon that should just always be up, `always` is the
+safer default. `StartLimitIntervalSec=60` / `StartLimitBurst=5` in `[Unit]` caps it at 5
+restarts per 60s; if `vobot_gpu_daemon.py` is crash-looping (e.g. `nvidia-smi` missing),
+systemd gives up and marks the unit `failed` instead of burning CPU in a restart storm —
+check with `systemctl status vobot-gpu-daemon` if `/api/gpu-data` ever goes dark.
+
 Runs as `nobody` — `/dev/nvidia*` on this host is world read/write so no
 elevated privileges are needed to query the GPU.
+
+To restart it manually
+
+```bash
+ssh root@proxmox "systemctl daemon-reload && systemctl restart vobot-gpu-daemon"
+```
 
 ## Config
 
