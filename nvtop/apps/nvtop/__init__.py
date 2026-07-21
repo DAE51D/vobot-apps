@@ -6,9 +6,9 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 __version__ = VERSION
-GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
+GIT_COMMIT = "f027f2e-dirty"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
 
@@ -17,7 +17,7 @@ _SCR_WIDTH, _SCR_HEIGHT = peripherals.screen.screen_resolution
 # Default settings (see get_settings_json / .github/prompts/nvtop.prompt.md)
 SERVER = "http://proxmox.home.lan:8039"  # vobot-gpu-daemon (or a gpu-hot instance)
 GPU_INDEX = "0"
-POLL_INTERVAL = 2  # seconds between /api/gpu-data fetches
+POLL_INTERVAL = 5  # seconds between /api/gpu-data fetches
 PAGE_CYCLE_SECONDS = 5  # seconds between auto page cycles
 AUTO_CYCLE = True
 
@@ -28,6 +28,7 @@ AUTO_CYCLE_PAGES = 2
 PROCESS_HEADER_TEXT = "Processes (Top GPU Mem)"
 PROCESS_HEADER_SCROLL_TEXT = "Processes - ENTER/ESC to exit scroll"
 PROCESS_SCROLL_STEP = 60  # px per encoder click while scrolling the process list
+MAX_CMD_CHARS = 400  # cap raw command length before tokenizing (e.g. ffmpeg filter graphs can run 2000+ chars)
 
 # Globals
 _scr = None
@@ -38,7 +39,10 @@ _current_page = 0  # 0=gauges, 1=history chart, 2=details, 3=processes
 _process_scroll_mode = False  # ENTER on page 3 toggles: encoder scrolls the arg list instead of paging apps
 _ui = None  # Cached LVGL widget references for fast updates/page switches
 _styles = None  # Cached LVGL styles to avoid recreating (and GC issues)
-_fetch_ok = False  # False until first successful fetch; drives OFFLINE indicator
+_fetch_ok = False  # result of the most recent single poll (not debounced)
+_consec_fail = 0  # consecutive failed polls in a row
+_show_offline = False  # debounced flag that actually drives the OFFLINE indicator
+OFFLINE_FAIL_THRESHOLD = 2  # consecutive failures required before showing OFFLINE; a lone blip shouldn't flash it
 _hist_util = []
 _hist_mem = []
 _hist_mem_activity = []
@@ -91,11 +95,11 @@ def get_settings_json():
             },
             {
                 "type": "input",
-                "default": "2",
+                "default": "5",
                 "caption": "Poll Interval (seconds)",
                 "name": "poll_interval",
-                "attributes": {"maxLength": 3, "placeholder": "2"},
-                "tip": "How often to fetch GPU stats (1-60 seconds)"
+                "attributes": {"maxLength": 3, "placeholder": "5"},
+                "tip": "How often to fetch GPU stats (1-60 seconds). Lower values poll more often but each failed/slow request can briefly freeze the UI."
             },
             {
                 "type": "input",
@@ -157,9 +161,28 @@ def _load_settings():
         AUTO_CYCLE = auto
 
 
+def _mark_fetch_result(ok):
+    """Record a single poll's outcome and update the debounced OFFLINE display flag.
+
+    A lone failed poll doesn't flip the indicator -- only OFFLINE_FAIL_THRESHOLD
+    consecutive failures do. Any success clears it immediately. This exists because
+    single blips (a slow daemon response, a transient network hiccup) were flashing
+    OFFLINE on/off every poll cycle, which read as the app being broken.
+    """
+    global _fetch_ok, _consec_fail, _show_offline
+    _fetch_ok = ok
+    if ok:
+        _consec_fail = 0
+        _show_offline = False
+    else:
+        _consec_fail += 1
+        if _consec_fail >= OFFLINE_FAIL_THRESHOLD:
+            _show_offline = True
+
+
 async def fetch_gpu_data():
     """Fetch GPU telemetry from the configured daemon (vobot-gpu-daemon or gpu-hot)."""
-    global _metrics, _fetch_ok, _hist_util, _hist_mem, _hist_mem_activity
+    global _metrics, _hist_util, _hist_mem, _hist_mem_activity
 
     headers = {
         "Accept": "application/json",
@@ -168,9 +191,12 @@ async def fetch_gpu_data():
     url = f"{SERVER}/api/gpu-data"
     resp = None
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        # Shorter than POLL_INTERVAL's old 10s/2s mismatch: urequests blocks the whole
+        # single-threaded event loop while waiting, so a long timeout here directly
+        # freezes the entire device UI on every slow/failed request.
+        resp = requests.get(url, headers=headers, timeout=5)
         if resp.status_code != 200:
-            _fetch_ok = False
+            _mark_fetch_result(False)
             return False
 
         data = resp.json()
@@ -181,7 +207,7 @@ async def fetch_gpu_data():
             # Configured index missing (e.g. renumbered) - fall back to first GPU reported.
             g = list(gpus.values())[0]
         if not g:
-            _fetch_ok = False
+            _mark_fetch_result(False)
             return False
 
         _metrics['name'] = g.get('name') or _metrics['name']
@@ -251,11 +277,11 @@ async def fetch_gpu_data():
         if len(_hist_mem_activity) > HISTORY_POINTS:
             _hist_mem_activity.pop(0)
 
-        _fetch_ok = True
+        _mark_fetch_result(True)
         return True
     except Exception as e:
         print(f"Fetch error: {e}")
-        _fetch_ok = False
+        _mark_fetch_result(False)
         return False
     finally:
         if resp is not None:
@@ -680,6 +706,12 @@ def _format_process_block(p):
     cpu = p.get('cpu_percent')
     cmd = p.get('command') or name
 
+    # Some processes (e.g. ffmpeg with a filter_complex graph) report command lines
+    # thousands of characters long. Cap it up front so tokenizing/joining stays cheap
+    # and bounded on constrained MicroPython heap.
+    if cmd and len(cmd) > MAX_CMD_CHARS:
+        cmd = cmd[:MAX_CMD_CHARS] + "..."
+
     tokens = cmd.split() if cmd else []
     argv0 = tokens[0] if tokens else name
 
@@ -711,10 +743,10 @@ def _update_ui_for_current_page():
     if _ui is None:
         return
 
-    if _fetch_ok:
-        _ui['offline_label'].add_flag(lv.obj.FLAG.HIDDEN)
-    else:
+    if _show_offline:
         _ui['offline_label'].clear_flag(lv.obj.FLAG.HIDDEN)
+    else:
+        _ui['offline_label'].add_flag(lv.obj.FLAG.HIDDEN)
 
     if _current_page == 0:
         util = int(_metrics['util'])
@@ -782,9 +814,15 @@ def _update_ui_for_current_page():
         if not procs:
             _ui['process_body'].set_text("No process data from daemon")
         else:
-            separator = "-" * 40
-            blocks = [_format_process_block(p) for p in procs]
-            _ui['process_body'].set_text(("\n" + separator + "\n").join(blocks))
+            try:
+                separator = "-" * 40
+                blocks = [_format_process_block(p) for p in procs]
+                _ui['process_body'].set_text(("\n" + separator + "\n").join(blocks))
+            except Exception as e:
+                # Never leave this page silently blank -- surface the parse failure
+                # so it's diagnosable instead of looking like a hang.
+                print(f"Process render error: {e}")
+                _ui['process_body'].set_text("Error rendering process data")
 
 
 async def on_boot(apm):
