@@ -7,7 +7,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/proxmox/resources/icon.png"
@@ -23,6 +23,13 @@ API_SECRET = ""  # Must be configured via web settings
 POLL_TIME = 10  # seconds between updates
 VM_THRESHOLD = 0  # Alert if VMs running below this count (0 = disabled)
 LXC_THRESHOLD = 0  # Alert if LXCs running below this count (0 = disabled)
+THEME = "orange"  # Accent color theme; "orange" matches forum.proxmox.com branding
+
+# Accent color per theme, keyed by the "theme" web-setting value
+THEME_ACCENTS = {
+    "orange": 0xE57000,  # Proxmox brand orange
+    "blue": 0x00CED1,    # Original dark turquoise accent
+}
 
 # Globals
 _scr = None
@@ -57,6 +64,14 @@ def get_settings_json():
     return {
         "title": "Proxmox Configuration",
         "form": [
+            {
+                "type": "select",
+                "default": "orange",
+                "caption": "Theme",
+                "name": "theme",
+                "options": [("Orange", "orange"), ("Blue", "blue")],
+                "tip": "Accent color for arcs and bars"
+            },
             {
                 "type": "input",
                 "default": "proxmox.home.lan:8006",
@@ -259,12 +274,13 @@ def _ensure_styles():
     container_style.set_radius(10)
 
     # Reuse color objects where possible to reduce allocations.
+    accent_hex = THEME_ACCENTS.get(THEME, THEME_ACCENTS["orange"])
     _styles = {
         'container': container_style,
         'c_white': lv.color_hex(0xFFFFFF),
         'c_gray': lv.color_hex(0x808080),
         'c_dark': lv.color_hex(0x404040),
-        'c_accent': lv.color_hex(0x00CED1),
+        'c_accent': lv.color_hex(accent_hex),
         'c_red': lv.color_hex(0xFF6B6B),
         'c_green': lv.color_hex(0x00FF00),
     }
@@ -612,9 +628,9 @@ def show_main_page():
 
 async def on_boot(apm):
     """App lifecycle: Called when app first loaded"""
-    global _app_mgr, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD
+    global _app_mgr, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD, THEME
     _app_mgr = apm
-    
+
     # Load settings
     if _app_mgr:
         cfg = _app_mgr.config()
@@ -623,7 +639,11 @@ async def on_boot(apm):
             NODE_NAME = cfg.get("node_name", NODE_NAME)
             API_TOKEN_ID = cfg.get("api_token_id", API_TOKEN_ID)
             API_SECRET = cfg.get("api_secret", API_SECRET)
-            
+
+            theme = cfg.get("theme")
+            if isinstance(theme, str) and theme in THEME_ACCENTS:
+                THEME = theme
+
             # Load thresholds
             vm_thresh = cfg.get("vm_threshold")
             if vm_thresh:
@@ -643,8 +663,8 @@ async def on_boot(apm):
 
 async def on_start():
     """App lifecycle: Called when user enters app"""
-    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD, _last_fetch_time
-    
+    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD, THEME, _last_fetch_time
+
     # Reload settings every time app starts (in case user changed them via web UI)
     if _app_mgr:
         cfg = _app_mgr.config()
@@ -653,7 +673,13 @@ async def on_start():
             NODE_NAME = cfg.get("node_name", NODE_NAME)
             API_TOKEN_ID = cfg.get("api_token_id", API_TOKEN_ID)
             API_SECRET = cfg.get("api_secret", API_SECRET)
-            
+
+            theme = cfg.get("theme")
+            if isinstance(theme, str) and theme in THEME_ACCENTS:
+                THEME = theme
+            else:
+                THEME = "orange"
+
             # Load thresholds
             vm_thresh = cfg.get("vm_threshold")
             if vm_thresh:
