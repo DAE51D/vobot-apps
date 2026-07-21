@@ -34,5 +34,6 @@ Thumbs.db
 /*.url
 /.venv
 .claude/settings.json
-.specstory/cli/config.toml
-.specstory/statistics.json
+
+# SpecStory chat transcripts can contain secrets pasted/echoed during sessions - never commit
+.specstory/
