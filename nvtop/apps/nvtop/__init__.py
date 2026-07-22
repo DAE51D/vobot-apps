@@ -6,9 +6,9 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 __version__ = VERSION
-GIT_COMMIT = "f027f2e-dirty"  # stamped at deploy time from `git rev-parse --short HEAD`
+GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
 CAN_BE_AUTO_SWITCHED = True
 
@@ -83,7 +83,11 @@ def get_settings_json():
                 "caption": "GPU Daemon Server",
                 "name": "server",
                 "attributes": {"maxLength": 100, "placeholder": "http://proxmox.home.lan:8039"},
-                "tip": "Base URL of vobot-gpu-daemon (or a gpu-hot instance - same JSON schema)"
+                "tip": "Base URL of vobot-gpu-daemon (or a gpu-hot instance - same JSON schema)",
+                "hint": {
+                    "url": "https://github.com/DAE51D/vobot-apps/tree/main/nvtop-daemon",
+                    "label": "Need the daemon? Get vobot-gpu-daemon on GitHub"
+                }
             },
             {
                 "type": "input",

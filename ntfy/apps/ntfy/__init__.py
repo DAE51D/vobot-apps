@@ -13,7 +13,7 @@ try:
 except Exception:
     asyncio = None
 
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 __version__ = VERSION  # Expose version for web UI
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 NAME = "ntfy"
@@ -647,7 +647,7 @@ async def on_running_foreground():
             except Exception:
                 pass
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=5)
         finally:
             set_mode_dot(busy=False)
         print(f"Status: {response.status_code}")

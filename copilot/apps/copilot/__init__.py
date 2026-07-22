@@ -11,7 +11,7 @@ except Exception:
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "copilot"
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/copilot/resources/icon.png"
@@ -184,7 +184,7 @@ async def fetch_summary():
     url = "https://api.github.com/users/%s/settings/billing/usage/summary" % GITHUB_USER
     resp = None
     try:
-        resp = requests.get(url, headers=_headers(), timeout=10)
+        resp = requests.get(url, headers=_headers(), timeout=8)
         if resp.status_code == 200:
             data = resp.json()
             items = data.get('usageItems', []) or []
@@ -226,7 +226,7 @@ async def fetch_history():
     url = "https://api.github.com/users/%s/settings/billing/usage?year=%d&month=%d" % (GITHUB_USER, year, month)
     resp = None
     try:
-        resp = requests.get(url, headers=_headers(), timeout=10)
+        resp = requests.get(url, headers=_headers(), timeout=8)
         if resp.status_code == 200:
             data = resp.json()
             items = data.get('usageItems', []) or []
@@ -278,10 +278,30 @@ async def fetch_history():
             resp.close()
 
 
+async def _yield_and_check_exit():
+    """Give the event loop a slice between blocking HTTP calls so a pending ESC
+    press (which the single-threaded run loop can't process *during* a blocking
+    requests.get()) gets a chance to land, then report whether this fetch
+    should bail instead of firing another blocking call.
+    """
+    if asyncio:
+        try:
+            await asyncio.sleep_ms(0)
+        except Exception:
+            pass
+    if _app_mgr is not None:
+        # app_mgr.state: 2 == active/foreground; anything else means the user
+        # already navigated away (or is mid-exit), so stop making more calls.
+        return getattr(_app_mgr, "state", 2) != 2
+    return False
+
+
 async def fetch_all():
     global _last_error
     _last_error = None
     ok1 = await fetch_summary()
+    if await _yield_and_check_exit():
+        return False
     ok2 = await fetch_history()
     return ok1 and ok2
 

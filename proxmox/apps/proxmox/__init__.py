@@ -3,11 +3,15 @@ import peripherals
 import urequests as requests
 import ujson
 import utime
+try:
+    import uasyncio as asyncio
+except Exception:
+    asyncio = None
 
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/proxmox/resources/icon.png"
@@ -142,6 +146,23 @@ def get_settings_json():
         ]
     }
 
+async def _yield_and_check_exit():
+    """Give the event loop a slice between blocking HTTP calls so a pending ESC
+    press (which the single-threaded run loop can't process *during* a blocking
+    requests.get()) gets a chance to land, then report whether this fetch
+    should bail instead of firing another blocking call.
+    """
+    if asyncio:
+        try:
+            await asyncio.sleep_ms(0)
+        except Exception:
+            pass
+    if _app_mgr is not None:
+        # app_mgr.state: 2 == active/foreground; anything else means the user
+        # already navigated away (or is mid-exit), so stop making more calls.
+        return getattr(_app_mgr, "state", 2) != 2
+    return False
+
 async def fetch_proxmox_data():
     """Fetch metrics from Proxmox API"""
     global _metrics, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, _last_rrd_fetch_time
@@ -161,7 +182,7 @@ async def fetch_proxmox_data():
         url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/status"
         resp = None
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json().get('data', {})
 
@@ -192,7 +213,11 @@ async def fetch_proxmox_data():
         finally:
             if resp is not None:
                 resp.close()
-        
+
+        # Give a pending ESC a chance to land before the next blocking call.
+        if await _yield_and_check_exit():
+            return True
+
         # Get network stats from RRD data.
         # This endpoint returns a larger payload; we throttle it a bit independently to reduce load.
         now = utime.time()
@@ -201,7 +226,7 @@ async def fetch_proxmox_data():
             url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/rrddata?timeframe=hour"
             resp = None
             try:
-                resp = requests.get(url, headers=headers, timeout=10)
+                resp = requests.get(url, headers=headers, timeout=5)
                 if resp.status_code == 200:
                     rrd_data = resp.json().get('data', [])
                     if rrd_data:
@@ -218,12 +243,16 @@ async def fetch_proxmox_data():
             finally:
                 if resp is not None:
                     resp.close()
-        
+
+        # Give a pending ESC a chance to land before the next blocking call.
+        if await _yield_and_check_exit():
+            return True
+
         # Get VM count
         url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/qemu"
         resp = None
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 vms = resp.json().get('data', [])
                 _metrics['vm_total'] = len(vms)
@@ -231,12 +260,16 @@ async def fetch_proxmox_data():
         finally:
             if resp is not None:
                 resp.close()
-        
+
+        # Give a pending ESC a chance to land before the next blocking call.
+        if await _yield_and_check_exit():
+            return True
+
         # Get LXC count
         url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/lxc"
         resp = None
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 lxcs = resp.json().get('data', [])
                 _metrics['lxc_total'] = len(lxcs)
