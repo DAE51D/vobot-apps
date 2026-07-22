@@ -7,7 +7,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/proxmox/resources/icon.png"
@@ -29,6 +29,25 @@ THEME = "orange"  # Accent color theme; "orange" matches forum.proxmox.com brand
 THEME_ACCENTS = {
     "orange": 0xE57000,  # Proxmox brand orange
     "blue": 0x00CED1,    # Original dark turquoise accent
+}
+
+# CPU/RAM arc ring (track) color per theme; black gives the orange indicator more
+# contrast/"pop", blue theme keeps its original dark-gray track unchanged.
+THEME_RING_TRACK = {
+    "orange": 0x000000,
+    "blue": 0x404040,
+}
+
+# Network arrow icons per theme (pre-scaled to 18x20; do not swap for full-size art on-device)
+THEME_ARROWS = {
+    "orange": {
+        "down": "A:apps/proxmox/resources/arrow_orange_down.png",
+        "up": "A:apps/proxmox/resources/arrow_orange_up.png",
+    },
+    "blue": {
+        "down": "A:apps/proxmox/resources/arrow_blue_down.png",
+        "up": "A:apps/proxmox/resources/arrow_blue_up.png",
+    },
 }
 
 # Globals
@@ -275,11 +294,13 @@ def _ensure_styles():
 
     # Reuse color objects where possible to reduce allocations.
     accent_hex = THEME_ACCENTS.get(THEME, THEME_ACCENTS["orange"])
+    ring_hex = THEME_RING_TRACK.get(THEME, THEME_RING_TRACK["orange"])
     _styles = {
         'container': container_style,
         'c_white': lv.color_hex(0xFFFFFF),
         'c_gray': lv.color_hex(0x808080),
         'c_dark': lv.color_hex(0x404040),
+        'c_ring': lv.color_hex(ring_hex),
         'c_accent': lv.color_hex(accent_hex),
         'c_red': lv.color_hex(0xFF6B6B),
         'c_green': lv.color_hex(0x00FF00),
@@ -335,7 +356,7 @@ def _ensure_ui():
     cpu_arc.set_rotation(270)
     cpu_arc.set_style_arc_width(7, lv.PART.MAIN)
     cpu_arc.set_style_arc_width(7, lv.PART.INDICATOR)
-    cpu_arc.set_style_arc_color(_styles['c_dark'], lv.PART.MAIN)
+    cpu_arc.set_style_arc_color(_styles['c_ring'], lv.PART.MAIN)
     cpu_arc.set_style_arc_color(_styles['c_accent'], lv.PART.INDICATOR)
     cpu_arc.set_style_bg_opa(0, lv.PART.KNOB)
     cpu_arc.set_style_pad_all(0, lv.PART.KNOB)
@@ -372,7 +393,7 @@ def _ensure_ui():
     ram_arc.set_rotation(270)
     ram_arc.set_style_arc_width(7, lv.PART.MAIN)
     ram_arc.set_style_arc_width(7, lv.PART.INDICATOR)
-    ram_arc.set_style_arc_color(_styles['c_dark'], lv.PART.MAIN)
+    ram_arc.set_style_arc_color(_styles['c_ring'], lv.PART.MAIN)
     ram_arc.set_style_arc_color(_styles['c_accent'], lv.PART.INDICATOR)
     ram_arc.set_style_bg_opa(0, lv.PART.KNOB)
     ram_arc.set_style_pad_all(0, lv.PART.KNOB)
@@ -401,7 +422,7 @@ def _ensure_ui():
         bl.set_scrollbar_mode(lv.SCROLLBAR_MODE.OFF)
 
     net_in_img = lv.img(bl)
-    net_in_img.set_src("A:apps/proxmox/resources/arrow_down.png")
+    net_in_img.set_src(THEME_ARROWS.get(THEME, THEME_ARROWS["orange"])["down"])
     net_in_img.align(lv.ALIGN.TOP_LEFT, 0, 4)
 
     net_in_label = lv.label(bl)
@@ -415,7 +436,7 @@ def _ensure_ui():
     net_in_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
 
     net_out_img = lv.img(bl)
-    net_out_img.set_src("A:apps/proxmox/resources/arrow_green.png")
+    net_out_img.set_src(THEME_ARROWS.get(THEME, THEME_ARROWS["orange"])["up"])
     net_out_img.align(lv.ALIGN.TOP_LEFT, 0, 52)
 
     net_out_label = lv.label(bl)

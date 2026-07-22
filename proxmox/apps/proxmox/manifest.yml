@@ -1,6 +1,6 @@
 application:
   name: proxmox
-  version: 1.0.4
+  version: 1.0.5
   category: Utility
   icon: A:apps/proxmox/resources/icon.png
   description: Display Proxmox node metrics and VM/LXC counts
