@@ -111,13 +111,14 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 
 ### Controls
 
-| Action                                  | Function                                                        |
-| ---------------------------------------- | ----------------------------------------------------------------- |
-| Rotate clockwise / counter-clockwise    | Change pages (or scroll the process list, in scroll mode)       |
-| Wait                                    | Auto-cycle between Gauges/History if enabled                    |
-| Press ENTER (on Processes page)         | Toggle content-scroll mode                                      |
-| Press ENTER or ESC (in scroll mode)     | Exit scroll mode, back to normal page navigation                |
-| Press ESC (not in scroll mode)          | Exit app                                                         |
+
+| Action                               | Function                                                  |
+| -------------------------------------- | ----------------------------------------------------------- |
+| Rotate clockwise / counter-clockwise | Change pages (or scroll the process list, in scroll mode) |
+| Wait                                 | Auto-cycle between Gauges/History if enabled              |
+| Press ENTER (on Processes page)      | Toggle content-scroll mode                                |
+| Press ENTER or ESC (in scroll mode)  | Exit scroll mode, back to normal page navigation          |
+| Press ESC (not in scroll mode)       | Exit app                                                  |
 
 ### Pages
 
@@ -155,6 +156,7 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
   --foo bar
   --fee fum
   ```
+
   (argv0, then a summary line, then every CLI flag with its value on its own line)
 - A dashed rule separates consecutive processes
 - Press **ENTER** to enter scroll mode (header turns blue, "ENTER/ESC to exit") — the encoder then scrolls the list instead of changing pages, so long argument lists are fully readable

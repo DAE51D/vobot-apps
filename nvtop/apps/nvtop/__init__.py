@@ -80,13 +80,13 @@ def get_settings_json():
             {
                 "type": "input",
                 "default": "http://proxmox.home.lan:8039",
-                "caption": "GPU Daemon Server",
+                "caption": "GPU Daemon Server (https://github.com/DAE51D/vobot-apps/tree/main/nvtop-daemon)",
                 "name": "server",
                 "attributes": {"maxLength": 100, "placeholder": "http://proxmox.home.lan:8039"},
-                "tip": "Base URL of vobot-gpu-daemon (or a gpu-hot instance - same JSON schema)",
+                "tip": "Base URL of vobot-gpu-daemon (or a gpu-hot instance - same JSON schema) ",
                 "hint": {
                     "url": "https://github.com/DAE51D/vobot-apps/tree/main/nvtop-daemon",
-                    "label": "Need the daemon? Get vobot-gpu-daemon on GitHub"
+                    "label": "Get vobot-gpu-daemon on GitHub"
                 }
             },
             {
