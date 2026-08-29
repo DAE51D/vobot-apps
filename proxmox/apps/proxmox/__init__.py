@@ -11,7 +11,7 @@ except Exception:
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/proxmox/resources/icon.png"
@@ -79,7 +79,8 @@ _metrics = {
     'swap_total': 0,
     'disk_pct': 0,
     'disk_used': 0,
-    'disk_total': 0
+    'disk_total': 0,
+    'error': '',
 }
 
 
@@ -109,7 +110,7 @@ def get_settings_json():
                 "caption": "Node Name",
                 "name": "node_name",
                 "attributes": {"maxLength": 30, "placeholder": "pve"},
-                "tip": "Name of the node to monitor"
+                "tip": "Node name as shown in the PVE UI tree (run 'hostname' on the host). Often 'pve', but NOT always - a wrong value here makes every metric read 0."
             },
             {
                 "type": "input",
@@ -183,33 +184,40 @@ async def fetch_proxmox_data():
         resp = None
         try:
             resp = requests.get(url, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json().get('data', {})
+            if resp.status_code != 200:
+                # PVE returns 500 (not 404) for an unknown node -- it tries to DNS
+                # resolve the name -- so a typo'd Node Name looks like a server fault.
+                _metrics['error'] = "HTTP {} node '{}'".format(resp.status_code, NODE_NAME)
+                print("Proxmox API error:", _metrics['error'])
+                return False
 
-                cpu_frac = data.get('cpu', 0) or 0
-                _metrics['cpu'] = int(cpu_frac * 100)
-                _metrics['uptime'] = data.get('uptime', 0) or 0
+            _metrics['error'] = ''
+            data = resp.json().get('data', {})
 
-                mem_data = data.get('memory', {}) or {}
-                mem_used = mem_data.get('used', 0) or 0
-                mem_total = mem_data.get('total', 1) or 1
-                _metrics['mem_pct'] = int((mem_used * 100) / mem_total)
-                _metrics['mem_used'] = int(mem_used / (1024**3) + 0.5)  # GB rounded
-                _metrics['mem_total'] = int(mem_total / (1024**3) + 0.99)  # GB rounded up
+            cpu_frac = data.get('cpu', 0) or 0
+            _metrics['cpu'] = int(cpu_frac * 100)
+            _metrics['uptime'] = data.get('uptime', 0) or 0
 
-                swap_data = data.get('swap', {}) or {}
-                swap_used = swap_data.get('used', 0) or 0
-                swap_total = swap_data.get('total', 0) or 0
-                _metrics['swap_pct'] = int((swap_used * 100) / swap_total) if swap_total > 0 else 0
-                _metrics['swap_used'] = int(swap_used / (1024**3) + 0.5)  # GB rounded
-                _metrics['swap_total'] = int(swap_total / (1024**3) + 0.5)  # GB rounded
+            mem_data = data.get('memory', {}) or {}
+            mem_used = mem_data.get('used', 0) or 0
+            mem_total = mem_data.get('total', 1) or 1
+            _metrics['mem_pct'] = int((mem_used * 100) / mem_total)
+            _metrics['mem_used'] = int(mem_used / (1024**3) + 0.5)  # GB rounded
+            _metrics['mem_total'] = int(mem_total / (1024**3) + 0.99)  # GB rounded up
 
-                disk_data = data.get('rootfs', {}) or {}
-                disk_used = disk_data.get('used', 0) or 0
-                disk_total = disk_data.get('total', 1) or 1
-                _metrics['disk_pct'] = int((disk_used * 100) / disk_total)
-                _metrics['disk_used'] = int(disk_used / (1024**3) + 0.5)  # GB rounded
-                _metrics['disk_total'] = int(disk_total / (1024**3) + 0.5)  # GB rounded
+            swap_data = data.get('swap', {}) or {}
+            swap_used = swap_data.get('used', 0) or 0
+            swap_total = swap_data.get('total', 0) or 0
+            _metrics['swap_pct'] = int((swap_used * 100) / swap_total) if swap_total > 0 else 0
+            _metrics['swap_used'] = int(swap_used / (1024**3) + 0.5)  # GB rounded
+            _metrics['swap_total'] = int(swap_total / (1024**3) + 0.5)  # GB rounded
+
+            disk_data = data.get('rootfs', {}) or {}
+            disk_used = disk_data.get('used', 0) or 0
+            disk_total = disk_data.get('total', 1) or 1
+            _metrics['disk_pct'] = int((disk_used * 100) / disk_total)
+            _metrics['disk_used'] = int(disk_used / (1024**3) + 0.5)  # GB rounded
+            _metrics['disk_total'] = int(disk_total / (1024**3) + 0.5)  # GB rounded
         finally:
             if resp is not None:
                 resp.close()
@@ -281,6 +289,7 @@ async def fetch_proxmox_data():
         return True
     except Exception as e:
         print(f"Fetch error: {e}")
+        _metrics['error'] = str(e)[:32]
         return False
 
 def event_handler(e):
@@ -523,6 +532,12 @@ def _ensure_ui():
     error_label.set_style_text_color(_styles['c_red'], 0)
     error_label.add_flag(lv.obj.FLAG.HIDDEN)
 
+    # Main page only has room for a terse marker; the debug page carries the detail.
+    main_error_label = lv.label(page_main)
+    main_error_label.align(lv.ALIGN.BOTTOM_MID, 0, -1)
+    main_error_label.set_style_text_color(_styles['c_red'], 0)
+    main_error_label.add_flag(lv.obj.FLAG.HIDDEN)
+
     _ui = {
         'page_main': page_main,
         'page_debug': page_debug,
@@ -541,6 +556,7 @@ def _ensure_ui():
         'lxc_bar': lxc_bar,
         'debug_label': debug_label,
         'error_label': error_label,
+        'main_error_label': main_error_label,
     }
 
 
@@ -625,9 +641,20 @@ def _update_ui_for_current_page():
         _ui['error_label'].set_text("Not Configured\n\nGo to /apps settings.")
         _ui['error_label'].clear_flag(lv.obj.FLAG.HIDDEN)
         _ui['debug_label'].add_flag(lv.obj.FLAG.HIDDEN)
+        _ui['main_error_label'].set_text("NOT CONFIGURED")
+        _ui['main_error_label'].clear_flag(lv.obj.FLAG.HIDDEN)
+    elif _metrics['error']:
+        _ui['error_label'].set_text(
+            "API Error\n{}\n\nCheck Host / Node Name /\ntoken in /apps settings.".format(_metrics['error'])
+        )
+        _ui['error_label'].clear_flag(lv.obj.FLAG.HIDDEN)
+        _ui['debug_label'].add_flag(lv.obj.FLAG.HIDDEN)
+        _ui['main_error_label'].set_text("API ERROR - see page 2")
+        _ui['main_error_label'].clear_flag(lv.obj.FLAG.HIDDEN)
     else:
         _ui['error_label'].add_flag(lv.obj.FLAG.HIDDEN)
         _ui['debug_label'].clear_flag(lv.obj.FLAG.HIDDEN)
+        _ui['main_error_label'].add_flag(lv.obj.FLAG.HIDDEN)
 
         uptime = int(_metrics['uptime'])
         uptime_d = uptime // 86400
