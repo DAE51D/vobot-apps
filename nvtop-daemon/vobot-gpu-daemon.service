@@ -1,5 +1,5 @@
 [Unit]
-Description=Vobot GPU Monitor Daemon (nvidia-smi JSON API for Mini Dock nvtop app)
+Description=Vobot GPU Monitor Daemon (nvidia-smi/amd-smi JSON API for Mini Dock nvtop app)
 After=network.target
 StartLimitIntervalSec=60
 StartLimitBurst=5

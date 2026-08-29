@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
@@ -70,6 +70,8 @@ _metrics = {
     'throttle': 'None',
     'processes': [],
     'daemon_commit': '?',
+    'daemon_version': '?',
+    'daemon_backend': '?',
 }
 
 
@@ -205,6 +207,9 @@ async def fetch_gpu_data():
 
         data = resp.json()
         _metrics['daemon_commit'] = str(data.get('git_commit') or '?')
+        # Absent on daemons older than 1.1.0, which were nvidia-only by definition.
+        _metrics['daemon_version'] = str(data.get('version') or '1.0.x')
+        _metrics['daemon_backend'] = str(data.get('backend') or 'nvidia')
         gpus = data.get('gpus', {}) or {}
         g = gpus.get(GPU_INDEX)
         if g is None and gpus:
@@ -800,6 +805,8 @@ def _update_ui_for_current_page():
         throttle = _metrics['throttle']
         mem_activity = _metrics['mem_activity']
         daemon_commit = _metrics['daemon_commit']
+        daemon_version = _metrics['daemon_version']
+        daemon_backend = _metrics['daemon_backend']
 
         lines = [
             f"Clock GFX: {clock_gfx}/{clock_gfx_max} MHz",
@@ -809,7 +816,8 @@ def _update_ui_for_current_page():
             f"PCIe: Gen{pcie_gen}x{pcie_width} (max Gen{pcie_gen_max}x{pcie_width_max})",
             f"State: {pstate}",
             f"Throttle: {throttle}",
-            f"Daemon: {daemon_commit}  App: {VERSION} ({GIT_COMMIT})",
+            f"Daemon: v{daemon_version}/{daemon_backend} ({daemon_commit})",
+            f"App: {VERSION} ({GIT_COMMIT})",
         ]
         _ui['details_body'].set_text("\n".join(lines))
 
