@@ -11,7 +11,7 @@ except Exception:
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "proxmox"
-VERSION = "1.0.7"
+VERSION = "1.0.8"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/proxmox/resources/icon.png"
@@ -60,6 +60,11 @@ _app_mgr = None
 _last_fetch_time = -999
 _current_page = 0  # 0=main dashboard, 1=debug data
 _ui = None  # Cached LVGL widget references for fast updates/page switches
+_consecutive_failures = 0
+# A lone timeout (esp. on the ~29KB rrddata payload, the slowest call over wifi+TLS
+# on this hardware) is normal and self-heals next cycle -- don't flash the alarming
+# red banner for that. Only surface it once real trouble persists across polls.
+_ERROR_THRESHOLD = 3
 _styles = None  # Cached LVGL styles to avoid recreating (and GC issues)
 _last_rrd_fetch_time = -999  # RRD payload is large; allow throttling independently
 _metrics = {
@@ -166,11 +171,20 @@ async def _yield_and_check_exit():
 
 async def fetch_proxmox_data():
     """Fetch metrics from Proxmox API"""
-    global _metrics, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, _last_rrd_fetch_time
-    
+    global _metrics, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, _last_rrd_fetch_time, _consecutive_failures
+
     if not API_SECRET:
         return False
-    
+
+    def _record_failure(msg):
+        # Debounced: only surface the sticky banner once failures persist, so a
+        # single blip on a slow/loaded wifi link doesn't read as "broken".
+        global _consecutive_failures
+        _consecutive_failures += 1
+        print(f"Proxmox API error ({_consecutive_failures}/{_ERROR_THRESHOLD}): {msg}")
+        if _consecutive_failures >= _ERROR_THRESHOLD:
+            _metrics['error'] = msg[:32]
+
     try:
         # Keep request headers minimal; never log the token/secret.
         headers = {
@@ -187,10 +201,10 @@ async def fetch_proxmox_data():
             if resp.status_code != 200:
                 # PVE returns 500 (not 404) for an unknown node -- it tries to DNS
                 # resolve the name -- so a typo'd Node Name looks like a server fault.
-                _metrics['error'] = "HTTP {} node '{}'".format(resp.status_code, NODE_NAME)
-                print("Proxmox API error:", _metrics['error'])
+                _record_failure("HTTP {} node '{}'".format(resp.status_code, NODE_NAME))
                 return False
 
+            _consecutive_failures = 0
             _metrics['error'] = ''
             data = resp.json().get('data', {})
 
@@ -222,11 +236,14 @@ async def fetch_proxmox_data():
             if resp is not None:
                 resp.close()
 
+        # Render immediately with what we have (CPU/RAM/uptime/disk/swap) rather than
+        # waiting on the slower rrddata/qemu/lxc calls below -- this is what makes the
+        # first load feel instant instead of sitting blank for several seconds.
+        _update_ui_for_current_page()
+
         # Give a pending ESC a chance to land before the next blocking call.
         if await _yield_and_check_exit():
             return True
-
-        # Get network stats from RRD data.
         # This endpoint returns a larger payload; we throttle it a bit independently to reduce load.
         now = utime.time()
         if now - _last_rrd_fetch_time >= max(10, POLL_TIME):
@@ -234,7 +251,8 @@ async def fetch_proxmox_data():
             url = f"https://{PVE_HOST}/api2/json/nodes/{NODE_NAME}/rrddata?timeframe=hour"
             resp = None
             try:
-                resp = requests.get(url, headers=headers, timeout=5)
+                # Largest payload of the four calls; give it more slack than the default 5s.
+                resp = requests.get(url, headers=headers, timeout=8)
                 if resp.status_code == 200:
                     rrd_data = resp.json().get('data', [])
                     if rrd_data:
@@ -268,6 +286,7 @@ async def fetch_proxmox_data():
         finally:
             if resp is not None:
                 resp.close()
+        _update_ui_for_current_page()
 
         # Give a pending ESC a chance to land before the next blocking call.
         if await _yield_and_check_exit():
@@ -289,7 +308,8 @@ async def fetch_proxmox_data():
         return True
     except Exception as e:
         print(f"Fetch error: {e}")
-        _metrics['error'] = str(e)[:32]
+        _record_failure(str(e))
+        return False
         return False
 
 def event_handler(e):
@@ -744,7 +764,7 @@ async def on_boot(apm):
 
 async def on_start():
     """App lifecycle: Called when user enters app"""
-    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD, THEME, _last_fetch_time
+    global _scr, _current_page, PVE_HOST, NODE_NAME, API_TOKEN_ID, API_SECRET, VM_THRESHOLD, LXC_THRESHOLD, THEME, _last_fetch_time, _last_rrd_fetch_time
 
     # Reload settings every time app starts (in case user changed them via web UI)
     if _app_mgr:
@@ -788,7 +808,13 @@ async def on_start():
         _scr = lv.obj()
         _scr.set_style_bg_color(lv.color_hex3(0x000), lv.PART.MAIN)
         _scr.add_event(event_handler, lv.EVENT.ALL, None)
-        
+
+        # Skip the ~29KB rrddata call on this first fetch -- it's the slowest of the
+        # four and the least urgent (just the network graph); deferring it to the
+        # next poll lets CPU/RAM/VMs/LXCs render right away instead of the whole
+        # dashboard sitting at 0 for several seconds while it downloads.
+        _last_rrd_fetch_time = utime.time()
+
         # Setup focus group for encoder events
         group = lv.group_get_default()
         if group:
