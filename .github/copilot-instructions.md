@@ -598,3 +598,17 @@ So for example, on my drive:
 
 - D:\daevid\Code\Vobot\proxmox\apps -> proxmox (not IN this `proxmox` folder, but select that one in the tool)
 - D:\daevid\Code\Vobot\ntfy\apps -> ntfy (not IN this `ntfy` folder, but select that one in the tool)
+
+# Code/Docs Search via jCodeMunch / jDocMunch MCP
+
+This project's source (the 4 mini-app `__init__.py`/`manifest.yml` files plus `nvtop-daemon`) is
+indexed in the homelab's shared jCodeMunch MCP as repo `local/vobot-27700180`, and its docs (READMEs,
+this file, `.github/prompts/*.prompt.md`, the `.claude/skills/mini-dock/` skill docs) are indexed in
+jDocMunch's `homelab-runbooks` repo under `vobot/` — both hosted on Komodo LXC 125
+(`http://komodo.home.lan:3013` / `:3015`). If the `jcodemunch`/`jdocmunch` MCP tools are available in
+your session, prefer `search_symbols`/`get_repo_outline`/`get_repo_map` and `search_sections` over
+blind grep/file reads when exploring unfamiliar parts of this codebase — they're pre-indexed and much
+cheaper per the measured benchmarks. If they're not enabled in your current tool list, ask the user to
+enable the `jcodemunch`/`jdocmunch` MCP servers before doing a large manual exploration pass. This is a
+snapshot, not a live sync — if the source changes significantly, ask the user whether to re-run
+`index_folder`/`index_local` against it.

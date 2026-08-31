@@ -1,7 +1,7 @@
 ---
 description: "Vobot GPU Monitor App: Build/update the 'nvtop' Vobot Mini Dock app that shows live NVIDIA GPU stats (util/mem/temp/power/clocks) by polling our own vobot-gpu-daemon REST API. Use when: building or refining the nvtop app screens, wiring the daemon fetch, tuning arc/chart ranges, or debugging the device-side fetch."
 agent: 'agent'
-tools: ['search/changes', 'search', 'edit/editFiles', 'execute/runInTerminal']
+tools: ['search/changes', 'search', 'edit/editFiles', 'execute/runInTerminal', 'jcodemunch/*', 'jdocmunch/*', 'jdatamunch/*']
 context: |
   - Vobot platform conventions: see .github/copilot-instructions.md (lifecycle, LVGL, web settings, upload/debug workflow)
   - Reference apps for patterns: proxmox/apps/proxmox/__init__.py (arc gauges, encoder handling), ntfy/apps/ntfy/__init__.py (page caching via HIDDEN flag instead of rebuild), copilot/apps/copilot/__init__.py (stacked lv.chart bar+line pattern)

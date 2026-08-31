@@ -1,7 +1,7 @@
 ---
 description: "Vobot Copilot Spend App: Build/update the 'copilot' Vobot Mini Dock app that graphs GitHub Copilot / billing spend on-device. Use when: building or refining the copilot app screens, wiring the GitHub Billing REST API, tuning gauge/chart ranges, or debugging the device-side fetch."
 agent: 'agent'
-tools: ['search/changes', 'search', 'edit/editFiles', 'execute/runInTerminal', 'github/*']
+tools: ['search/changes', 'search', 'edit/editFiles', 'execute/runInTerminal', 'github/*', 'jcodemunch/*', 'jdocmunch/*', 'jdatamunch/*']
 context: |
   - GitHub account billing (web UI, human-only reference): https://github.com/settings/billing
   - GitHub REST Billing API docs: https://docs.github.com/en/rest/billing

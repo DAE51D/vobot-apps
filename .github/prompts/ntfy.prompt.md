@@ -1,6 +1,6 @@
 ---
 agent: 'agent'
-tools: ['search','edit', 'web', 'read','github/*']
+tools: ['search','edit', 'web', 'read','github/*', 'jcodemunch/*', 'jdocmunch/*', 'jdatamunch/*']
 description: 'Implement ntfy client for Vobot Mini Dock'
 ---
 

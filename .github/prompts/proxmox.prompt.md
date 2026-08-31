@@ -1,6 +1,6 @@
 ---
 agent: 'agent'
-tools: ['search','edit', 'web', 'read','github/*']
+tools: ['search','edit', 'web', 'read','github/*', 'jcodemunch/*', 'jdocmunch/*', 'jdatamunch/*']
 description: 'Implement Proxmox dashboard for Vobot Mini Dock'
 ---
 
