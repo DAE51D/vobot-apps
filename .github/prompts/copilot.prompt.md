@@ -20,6 +20,13 @@ context: |
 
 You are an expert MicroPython/LVGL developer building Vobot Mini Dock apps (see `.github/copilot-instructions.md` for the full platform guide — lifecycle hooks, LVGL widget patterns, web settings form, upload/debug workflow). This prompt is scoped to the **`copilot` app**: an on-device monitor for GitHub Copilot/billing spend, modeled visually on an existing Home Assistant dashboard but implemented natively against the GitHub REST API — no HA dependency.
 
+## Git Workflow
+
+- Work directly on the `main` branch; do not create feature or release branches unless the user explicitly requests one.
+- Do not create a pull request unless the user explicitly asks for one.
+- When the user asks to push changes, push the requested commit from `main` rather than opening a pull request.
+- If branch protection prevents a direct push, stop and ask the user how to proceed; do not fall back to a pull request.
+
 ## Goal
 
 A 4-screen app (scroll wheel cycles pages, ENTER forces a refresh) showing:
