@@ -1,5 +1,5 @@
 ---
-description: "Vobot GPU Monitor App: Build/update the 'nvtop' Vobot Mini Dock app that shows live NVIDIA GPU stats (util/mem/temp/power/clocks) by polling our own vobot-gpu-daemon REST API. Use when: building or refining the nvtop app screens, wiring the daemon fetch, tuning arc/chart ranges, or debugging the device-side fetch."
+description: "Vobot GPU Monitor App: Build/update the 'nvtop' Vobot Mini Dock app that shows live GPU stats (util/mem/temp/power/clocks) by polling our own vobot-gpu-daemon REST API. Use when: building or refining the nvtop app screens, wiring the daemon fetch, tuning arc/chart ranges, or debugging the device-side fetch."
 agent: 'agent'
 tools: ['search/changes', 'search', 'edit/editFiles', 'execute/runInTerminal', 'jcodemunch/*', 'jdocmunch/*', 'jdatamunch/*']
 context: |
@@ -8,7 +8,7 @@ context: |
   - Our own daemon (built and deployed 2026-07-19): D:\daevid\Code\Vobot\nvtop-daemon\vobot_gpu_daemon.py + vobot-gpu-daemon.service, running on the Proxmox host at http://proxmox.home.lan:8039/api/gpu-data
   - Daemon README (deploy steps): D:\daevid\Code\Vobot\nvtop-daemon\README.md
   - gpu-hot project (reference/inspiration only, not a dependency): https://github.com/psalias2006/gpu-hot
-  - App source (built 2026-07-19, deployed and actively tested on-device, v1.0.3 as of 2026-07-20): D:\daevid\Code\Vobot\nvtop\apps\nvtop\__init__.py
+  - App source (v1.0.7, deployed and actively tested on-device as of 2026-10-16): D:\daevid\Code\Vobot\nvtop\apps\nvtop\__init__.py
   - App manifest: D:\daevid\Code\Vobot\nvtop\apps\nvtop\manifest.yml
   - App icon (generated placeholder, 48x48 PNG): D:\daevid\Code\Vobot\nvtop\apps\nvtop\resources\icon.png
 ---
@@ -91,7 +91,7 @@ A 4-page app (scroll wheel cycles pages manually; Gauges/History also auto-cycle
 
 **Page 2 — History chart**
 - Rolling line chart (`lv.chart`, LVGL 9.1 — see copilot app's stacked-chart notes for `TYPE.LINE` vs `TYPE.BAR` being per-chart not per-series) of GPU utilization % and memory utilization % over the last N samples
-- Match the reference nvtop capture's ~60s rolling window: buffer size = `60s / poll_interval`, default poll 2s → 30 points (tune once battery/network impact on-device is observed; keep buffer small, this is a memory-constrained device)
+- 30-sample rolling window, about 150s at the default 5s poll interval (keep the buffer small for the memory-constrained device)
 - Y axis 0–100 (both series are already percentages, so no dual-axis complexity needed here — simpler than the copilot app's bar+line overlay)
 
 **Page 3 — Details**
@@ -110,13 +110,13 @@ A 4-page app (scroll wheel cycles pages manually; Gauges/History also auto-cycle
 Per `get_settings_json()` convention (no `setup.html`, no manifest `settings:` YAML — see main platform guide):
 - `server` (input, default `http://proxmox.home.lan:8039`) — base URL of the `vobot-gpu-daemon` instance; no credentials field, this is non-secret telemetry (also works pointed at a gpu-hot instance, since the schema matches)
 - `gpu_index` (input, default `"0"`) — which key to read out of the `gpus` dict, for future multi-GPU hosts
-- `poll_interval` (input, default `"2"`, seconds) — how often to `GET /api/gpu-data`
+- `poll_interval` (input, default `"5"`, seconds) — how often to `GET /api/gpu-data`
 - `page_cycle_seconds` (input, default `"5"`) — auto-cycle interval between the 3 pages
 - `auto_cycle` (switch, default `true`) — allow disabling auto-cycle for users who just want to leave it on one page
 
 ## Device-Side Fetch Pattern
 
-Same shape as the `proxmox` app's `urequests` fetch: minimal headers, `Connection: close`, always `resp.close()` in a `finally`, try/except around the fetch setting an error flag the UI renders instead of crashing (e.g. "GPU offline" if the daemon host is unreachable — network hiccup, host rebooting, or the systemd service down independent of the GPU itself). Do the first fetch in `on_start()` so pages aren't empty on entry; poll on the configured interval from `on_running_foreground()`, not every 200ms tick.
+Same shape as the `proxmox` app's `urequests` fetch: minimal headers, `Connection: close`, `timeout=5`, always `resp.close()` in a `finally`, try/except around the fetch setting an error flag the UI renders instead of crashing. A failed poll clears telemetry and graph history; after two consecutive failures, a full-screen black view displays "GPU OFFLINE" and the configured `/api/gpu-data` URL. A successful poll restores the normal pages. Do the first fetch in `on_start()` so pages aren't empty on entry; poll on the configured interval from `on_running_foreground()`, not every 200ms tick.
 
 ## Daemon status (already done, reference only)
 
@@ -126,17 +126,18 @@ Same shape as the `proxmox` app's `urequests` fetch: minimal headers, `Connectio
 
 ## Implementation status
 
-**Built 2026-07-19, stable and released as v1.0.0.** Extensively verified on-device since (v1.0.0 → v1.0.3 as of 2026-07-20): 4-page cycle including the new Processes page, encoder paging, the offline indicator, `lv.chart` line-series rendering, gauges/history/details/processes all confirmed live against real GPU load (not just near-idle numbers).
+**Current release: v1.0.7 (2026-10-16).** The 4-page cycle, encoder paging, chart rendering, gauges/history/details/processes, and offline behavior have been verified on-device. The offline behavior was tested by stopping and restarting the daemon on `evox2`.
 
 **2026-07-20 hardening pass:**
-- Added `timeout=10` to the daemon fetch — its absence was traced (via live serial `Ctrl+C` during a device-wide freeze) to being able to hang the *entire* device indefinitely, not just this app, since MicroPython's event loop is single-threaded. See the `requests.get()` timeout note in `.github/copilot-instructions.md`.
+- Added a bounded timeout to the daemon fetch after confirming a blocked request can freeze the single-threaded device event loop; the current timeout is 5 seconds. See the `requests.get()` timeout note in `.github/copilot-instructions.md`.
 - Fixed a redundant double-fetch on every app entry (`on_start()`'s initial fetch wasn't syncing `_last_fetch_time`, so the next `on_running_foreground()` tick would immediately re-fetch).
 - Added `GIT_COMMIT` (stamped at deploy time) shown on the Details page alongside the daemon's own `git_commit` field, so both ends of the pipeline are traceable to a commit.
 - `lv_chart`'s built-in `set_div_line_count()` proved unreliable for the 25/50/75% gridlines (only the 50% line rendered) — replaced with explicit 1px `lv.obj` bars drawn as children of the chart at computed pixel offsets.
 - Added the Processes page (see Page 4 above) once the daemon grew a process-table endpoint.
 
+**2026-10-16 offline-state update:** Failed polls clear numeric telemetry, process rows, and graph history immediately. After two consecutive failures, the app covers the pages with a black "GPU OFFLINE" view and shows the configured API URL. Fresh data restores the normal page view.
+
 ## Open items
 
 - Icon: current `resources/icon.png` is a programmatically generated placeholder (green chip-with-pins glyph, matches the accent color used in the app) — swap for something nicer if desired, not blocking.
 - Future, explicitly out of scope now: macOS/Windows 11 ports of the daemon for non-Proxmox users.
-- Not yet committed to git as of 2026-07-20 (device testing is ongoing, per repo convention of not committing until confirmed working) — commit once the user gives the go-ahead.

@@ -1,6 +1,6 @@
 # nvtop App for Vobot Mini Dock
 
-A MicroPython NVIDIA GPU monitor for the Vobot Mini Dock.
+A MicroPython GPU monitor for the Vobot Mini Dock.
 
 ## Overview
 
@@ -9,7 +9,7 @@ A MicroPython NVIDIA GPU monitor for the Vobot Mini Dock.
 The app currently provides a 4-page UI:
 
 - Gauges page with GPU, memory, temperature, and power/memory bars
-- History page with GPU, memory-used, and memory-activity trend lines plus 25/50/75% gridlines
+- History page with GPU, memory-used, and memory-activity trend lines plus 25/50/75% gridlines (30 samples, about 150 seconds at the default poll interval)
 - Details page with clocks, PCIe info, performance state, throttle reasons, and daemon/app build info
 - Processes page listing the top GPU-memory processes, with full command-line args and its own encoder-driven scroll mode
 
@@ -26,7 +26,8 @@ Gauges/History auto-cycle between themselves; Details/Processes are manual-only 
 - Processes page: top GPU-memory processes, each showing `argv0`, `GPU/CPU/PID`, and every CLI flag on its own line, separated by a rule; press **ENTER** to toggle a content-scroll mode where the encoder scrolls the list instead of paging apps (press **ENTER** or **ESC** to exit back to normal paging)
 - Configurable polling interval and page auto-cycle
 - Works with multi-GPU hosts via configurable GPU index
-- All `requests.get()` calls use a 10s timeout — a slow/unreachable daemon can't freeze the whole device
+- Failed polls clear stale readings and graph history; after two consecutive failures, a full-screen offline view shows the configured API URL
+- All `requests.get()` calls use a 5-second timeout — a slow/unreachable daemon can't freeze the whole device indefinitely
 
 ## Screenshots
 
@@ -51,7 +52,7 @@ Gauges/History auto-cycle between themselves; Details/Processes are manual-only 
 
 - Vobot Mini Dock with Developer Mode enabled
 - WiFi connection
-- An NVIDIA GPU host reachable on your LAN
+- A supported GPU host reachable on your LAN
 - `vobot-gpu-daemon` running on that host
 
 ## Quick Start
@@ -85,14 +86,14 @@ Settings:
 
 - **GPU Daemon Server:** Base URL of the daemon, for example `http://proxmox.home.lan:8039`
 - **GPU Index:** Which GPU to display, default `0`
-- **Poll Interval:** Fetch interval in seconds, default `2`
+- **Poll Interval:** Fetch interval in seconds, default `5`
 - **Page Cycle Seconds:** Auto-cycle interval between pages, default `5`
 - **Auto-Cycle Pages:** Enable or disable automatic page rotation
 
 ## Installation
 
 ```powershell
-.venv\Scripts\python.exe -m py_compile apps/nvtop/__init__.py
+.venv\Scripts\python.exe -m py_compile nvtop/apps/nvtop/__init__.py
 
 # Push to Vobot (Windows PowerShell example - run from repository root)
 & ".\.venv\Scripts\python.exe" -m ampy.cli --port COM4 --baud 115200 --delay 2 put nvtop/apps/nvtop /apps/nvtop
@@ -173,6 +174,12 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 curl http://proxmox.home.lan:8039/api/gpu-data
 ```
 
+### App shows GPU OFFLINE
+
+- The app clears telemetry after a failed poll and shows the full-screen offline view after two consecutive failures
+- Check that the configured server's `/api/gpu-data` endpoint is reachable and the daemon is running
+- The offline view displays the configured endpoint; fresh telemetry restores the normal pages
+
 ### App does not appear in Vobot
 
 - Confirm the folder exists at `/apps/nvtop`
@@ -191,7 +198,7 @@ curl http://proxmox.home.lan:8039/api/gpu-data
 
 ## Technical Details
 
-- **Version:** 1.0.3
+- **Version:** 1.0.7
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL
 - **Dependencies:** `urequests`, `utime`, `lvgl`, `peripherals`

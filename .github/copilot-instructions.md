@@ -206,6 +206,8 @@ lv.scr_load(scr)
 4. Upload app folder to `/apps/your_app_name/`
 5. Press Ctrl+D to restart device
 
+After building or changing a Mini Dock app, upload the changed app code to the connected Vobot and restart it so the user can test the result on-device. Prefer uploading only the changed file when practical. This means deploying over USB to the device, not pushing a Git commit; if the device is unavailable or the upload fails, report that clearly and give the user the exact next step.
+
 ### Debugging
 - Logs print to Thonny console when connected in developer mode
 - Use `print()` statements for debugging
