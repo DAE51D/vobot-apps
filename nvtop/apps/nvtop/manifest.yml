@@ -1,9 +1,9 @@
 application:
   name: nvtop
-  version: 1.0.6
+  version: 1.0.7
   category: Utility
   icon: A:apps/nvtop/resources/icon.png
-  description: Live NVIDIA GPU stats (utilization, memory, temp, power, clocks) via vobot-gpu-daemon
+  description: Live GPU stats (utilization, memory, temp, power, clocks) via vobot-gpu-daemon
   author: Daevid Vincent
   author_email: daevid@daevid.com
   bugs: https://github.com/DAE51D/vobot-apps/issues

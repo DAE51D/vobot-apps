@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
@@ -21,7 +21,7 @@ POLL_INTERVAL = 5  # seconds between /api/gpu-data fetches
 PAGE_CYCLE_SECONDS = 5  # seconds between auto page cycles
 AUTO_CYCLE = True
 
-HISTORY_POINTS = 30  # ~60s of history at the default 2s poll interval
+HISTORY_POINTS = 30  # ~150s of history at the default 5s poll interval
 NUM_PAGES = 4
 AUTO_CYCLE_PAGES = 2
 
@@ -184,6 +184,28 @@ def _mark_fetch_result(ok):
         _consec_fail += 1
         if _consec_fail >= OFFLINE_FAIL_THRESHOLD:
             _show_offline = True
+        _clear_telemetry()
+
+
+def _clear_telemetry():
+    """Drop stale values so charts and gauges never imply an offline GPU is active."""
+    _hist_util.clear()
+    _hist_mem.clear()
+    _hist_mem_activity.clear()
+    _metrics['util'] = 0
+    _metrics['mem_pct'] = 0
+    _metrics['mem_activity'] = 0
+    _metrics['mem_used_gb'] = 0.0
+    _metrics['mem_total_gb'] = 0.0
+    _metrics['temp'] = 0
+    _metrics['power_draw'] = 0.0
+    _metrics['power_limit'] = 0.0
+    _metrics['fan'] = 0
+    _metrics['clock_gfx'] = 0
+    _metrics['clock_gfx_max'] = 0
+    _metrics['clock_mem'] = 0
+    _metrics['clock_mem_max'] = 0
+    _metrics['processes'] = []
 
 
 async def fetch_gpu_data():
@@ -607,12 +629,28 @@ def _ensure_ui():
     process_body.set_long_mode(lv.label.LONG.WRAP)
     process_body.set_width(_SCR_WIDTH - 18)
 
-    # --- Status overlay: shown on every page when the daemon is unreachable ---
-    offline_label = lv.label(_scr)
-    offline_label.set_text("OFFLINE")
-    offline_label.align(lv.ALIGN.TOP_RIGHT, -4, 2)
-    offline_label.set_style_text_color(_styles['c_red'], 0)
-    offline_label.add_flag(lv.obj.FLAG.HIDDEN)
+    # --- Full-screen status view: shown when the daemon is unreachable ---
+    offline_screen = lv.obj(_scr)
+    offline_screen.set_size(_SCR_WIDTH, _SCR_HEIGHT)
+    offline_screen.align(lv.ALIGN.TOP_LEFT, 0, 0)
+    offline_screen.set_style_bg_color(lv.color_hex(0x000000), lv.PART.MAIN)
+    offline_screen.set_style_bg_opa(lv.OPA.COVER, lv.PART.MAIN)
+    offline_screen.set_style_border_width(0, lv.PART.MAIN)
+    offline_screen.set_style_pad_all(0, lv.PART.MAIN)
+    offline_screen.clear_flag(lv.obj.FLAG.SCROLLABLE)
+    offline_screen.add_flag(lv.obj.FLAG.HIDDEN)
+
+    offline_title = lv.label(offline_screen)
+    offline_title.set_text("GPU OFFLINE")
+    offline_title.align(lv.ALIGN.CENTER, 0, -14)
+    offline_title.set_style_text_color(_styles['c_red'], 0)
+
+    offline_url = lv.label(offline_screen)
+    offline_url.align(lv.ALIGN.CENTER, 0, 18)
+    offline_url.set_width(_SCR_WIDTH - 24)
+    offline_url.set_long_mode(lv.label.LONG.WRAP)
+    offline_url.set_style_text_align(lv.TEXT_ALIGN.CENTER, 0)
+    offline_url.set_style_text_color(_styles['c_white'], 0)
 
     _ui = {
         'page_gauges': page_gauges,
@@ -639,7 +677,8 @@ def _ensure_ui():
         'process_rule': process_rule,
         'process_scroll': process_scroll,
         'process_body': process_body,
-        'offline_label': offline_label,
+        'offline_screen': offline_screen,
+        'offline_url': offline_url,
     }
 
     # Start with only the gauges page visible to avoid initial page overlap.
@@ -753,9 +792,10 @@ def _update_ui_for_current_page():
         return
 
     if _show_offline:
-        _ui['offline_label'].clear_flag(lv.obj.FLAG.HIDDEN)
+        _ui['offline_url'].set_text(f"{SERVER.rstrip('/')}/api/gpu-data")
+        _ui['offline_screen'].clear_flag(lv.obj.FLAG.HIDDEN)
     else:
-        _ui['offline_label'].add_flag(lv.obj.FLAG.HIDDEN)
+        _ui['offline_screen'].add_flag(lv.obj.FLAG.HIDDEN)
 
     if _current_page == 0:
         util = int(_metrics['util'])
