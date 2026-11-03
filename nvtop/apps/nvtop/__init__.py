@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.0.7"
+VERSION = "1.1.0"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
@@ -15,9 +15,9 @@ CAN_BE_AUTO_SWITCHED = True
 _SCR_WIDTH, _SCR_HEIGHT = peripherals.screen.screen_resolution
 
 # Default settings (see get_settings_json / .github/prompts/nvtop.prompt.md)
-SERVER = "http://proxmox.home.lan:8039"  # vobot-gpu-daemon (or a gpu-hot instance)
-GPU_INDEX = "0"
-POLL_INTERVAL = 5  # seconds between /api/gpu-data fetches
+SERVER = "http://proxmox.home.lan:8039"  # nvstats-service HTTP API (https://github.com/DAE51D/nvstats-service)
+API_PATH = "/api/v1/sample"  # minimal view; the GPU is chosen by the service (NVSTATS_GPU_INDEX)
+POLL_INTERVAL = 5  # seconds between fetches
 PAGE_CYCLE_SECONDS = 5  # seconds between auto page cycles
 AUTO_CYCLE = True
 
@@ -82,22 +82,14 @@ def get_settings_json():
             {
                 "type": "input",
                 "default": "http://proxmox.home.lan:8039",
-                "caption": "GPU Daemon Server (https://github.com/DAE51D/vobot-apps/tree/main/nvtop-daemon)",
+                "caption": "nvstats Server",
                 "name": "server",
                 "attributes": {"maxLength": 100, "placeholder": "http://proxmox.home.lan:8039"},
-                "tip": "Base URL of vobot-gpu-daemon (or a gpu-hot instance - same JSON schema) ",
+                "tip": "Base URL of the nvstats-service HTTP API on the GPU host ",
                 "hint": {
-                    "url": "https://github.com/DAE51D/vobot-apps/tree/main/nvtop-daemon",
-                    "label": "Get vobot-gpu-daemon on GitHub"
+                    "url": "https://github.com/DAE51D/nvstats-service",
+                    "label": "Get nvstats-service on GitHub"
                 }
-            },
-            {
-                "type": "input",
-                "default": "0",
-                "caption": "GPU Index",
-                "name": "gpu_index",
-                "attributes": {"maxLength": 3, "placeholder": "0"},
-                "tip": "Which GPU index to display on multi-GPU hosts"
             },
             {
                 "type": "input",
@@ -128,7 +120,7 @@ def get_settings_json():
 
 def _load_settings():
     """Read settings from app_mgr.config() into module globals."""
-    global SERVER, GPU_INDEX, POLL_INTERVAL, PAGE_CYCLE_SECONDS, AUTO_CYCLE
+    global SERVER, POLL_INTERVAL, PAGE_CYCLE_SECONDS, AUTO_CYCLE
 
     if not _app_mgr:
         return
@@ -139,10 +131,6 @@ def _load_settings():
     srv = cfg.get("server")
     if isinstance(srv, str) and srv:
         SERVER = srv.rstrip("/")
-
-    idx = cfg.get("gpu_index")
-    if isinstance(idx, str) and idx:
-        GPU_INDEX = idx
 
     poll = cfg.get("poll_interval")
     if poll:
@@ -209,14 +197,14 @@ def _clear_telemetry():
 
 
 async def fetch_gpu_data():
-    """Fetch GPU telemetry from the configured daemon (vobot-gpu-daemon or gpu-hot)."""
+    """Fetch the minimal GPU sample from the configured nvstats-service."""
     global _metrics, _hist_util, _hist_mem, _hist_mem_activity
 
     headers = {
         "Accept": "application/json",
         "Connection": "close",  # Helps avoid socket/resource leaks on MicroPython
     }
-    url = f"{SERVER}/api/gpu-data"
+    url = f"{SERVER}{API_PATH}"
     resp = None
     try:
         # Shorter than POLL_INTERVAL's old 10s/2s mismatch: urequests blocks the whole
@@ -229,72 +217,53 @@ async def fetch_gpu_data():
 
         data = resp.json()
         _metrics['daemon_commit'] = str(data.get('git_commit') or '?')
-        # Absent on daemons older than 1.1.0, which were nvidia-only by definition.
-        _metrics['daemon_version'] = str(data.get('version') or '1.0.x')
-        _metrics['daemon_backend'] = str(data.get('backend') or 'nvidia')
-        gpus = data.get('gpus', {}) or {}
-        g = gpus.get(GPU_INDEX)
-        if g is None and gpus:
-            # Configured index missing (e.g. renumbered) - fall back to first GPU reported.
-            g = list(gpus.values())[0]
+        _metrics['daemon_version'] = str(data.get('version') or '?')
+        g = data.get('gpu') or {}
         if not g:
             _mark_fetch_result(False)
             return False
+        _metrics['daemon_backend'] = str(g.get('backend') or '?')
 
         _metrics['name'] = g.get('name') or _metrics['name']
-        _metrics['driver'] = g.get('driver_version') or _metrics['driver']
-        _metrics['util'] = int(g.get('utilization') or 0)
-        mem_used_mib = float(g.get('memory_used') or 0)
-        mem_total_mib = float(g.get('memory_total') or 0)
+        _metrics['driver'] = g.get('driver') or _metrics['driver']
+        _metrics['util'] = int(g.get('util') or 0)
+        mem_used_mib = float(g.get('mem_used') or 0)
+        mem_total_mib = float(g.get('mem_total') or 0)
         if mem_total_mib > 0:
             mem_pct_used = int((mem_used_mib * 100) / mem_total_mib)
         else:
-            mem_pct_used = int(g.get('memory_utilization') or 0)
+            mem_pct_used = int(g.get('mem_util') or 0)
         _metrics['mem_pct'] = max(0, min(100, mem_pct_used))
-        _metrics['mem_activity'] = int(g.get('memory_utilization') or 0)
+        _metrics['mem_activity'] = int(g.get('mem_util') or 0)
         _metrics['mem_used_gb'] = mem_used_mib / 1024.0
         _metrics['mem_total_gb'] = mem_total_mib / 1024.0
-        _metrics['temp'] = int(g.get('temperature') or 0)
-        _metrics['power_draw'] = float(g.get('power_draw') or 0)
-        _metrics['power_limit'] = float(g.get('power_limit') or 0)
-        _metrics['fan'] = int(g.get('fan_speed') or 0)
-        _metrics['clock_gfx'] = int(g.get('clock_graphics') or 0)
-        _metrics['clock_gfx_max'] = int(g.get('clock_max_graphics') or 0)
-        _metrics['clock_mem'] = int(g.get('clock_memory') or 0)
-        _metrics['clock_mem_max'] = int(g.get('clock_max_memory') or 0)
+        _metrics['temp'] = int(g.get('temp') or 0)
+        _metrics['power_draw'] = float(g.get('power_w') or 0)
+        _metrics['power_limit'] = float(g.get('power_cap_w') or 0)
+        _metrics['fan'] = int(g.get('fan_pct') or 0)
+        _metrics['clock_gfx'] = int(g.get('clock_gfx') or 0)
+        _metrics['clock_gfx_max'] = int(g.get('clock_gfx_max') or 0)
+        _metrics['clock_mem'] = int(g.get('clock_mem') or 0)
+        _metrics['clock_mem_max'] = int(g.get('clock_mem_max') or 0)
         _metrics['pcie_gen'] = str(g.get('pcie_gen') or '?')
         _metrics['pcie_gen_max'] = str(g.get('pcie_gen_max') or '?')
         _metrics['pcie_width'] = str(g.get('pcie_width') or '?')
         _metrics['pcie_width_max'] = str(g.get('pcie_width_max') or '?')
-        _metrics['pstate'] = str(g.get('performance_state') or '?')
-        _metrics['throttle'] = str(g.get('throttle_reasons') or 'None')
-
-        proc_payload = data.get('processes') or {}
-        selected = []
-        if isinstance(proc_payload, dict):
-            selected = proc_payload.get(GPU_INDEX)
-            if selected is None and proc_payload:
-                selected = list(proc_payload.values())[0]
-        elif isinstance(proc_payload, list):
-            selected = proc_payload
+        _metrics['pstate'] = str(g.get('pstate') or '?')
+        _metrics['throttle'] = str(g.get('throttle') or 'None')
 
         norm = []
-        if isinstance(selected, list):
-            for p in selected:
-                if not isinstance(p, dict):
-                    continue
-                pid = str(p.get('pid') or '?')
-                name = str(p.get('process_name') or p.get('name') or '?')
-                gpu_mem = float(p.get('used_memory') or p.get('gpu_memory') or p.get('gpu_mem_mib') or 0)
-                cpu = p.get('cpu_percent')
-                cmd = str(p.get('command') or p.get('cmd') or name)
-                norm.append({
-                    'pid': pid,
-                    'name': name,
-                    'gpu_mem_mib': gpu_mem,
-                    'cpu_percent': cpu,
-                    'command': cmd,
-                })
+        for p in data.get('gpu_procs') or []:
+            if not isinstance(p, dict):
+                continue
+            name = str(p.get('name') or '?')
+            norm.append({
+                'pid': str(p.get('pid') or '?'),
+                'name': name,
+                'gpu_mem_mib': float(p.get('vram_kb') or 0) / 1024.0,
+                'cpu_percent': p.get('cpu_pct'),
+                'command': str(p.get('cmdline') or name),
+            })
         norm.sort(key=lambda item: item.get('gpu_mem_mib') or 0, reverse=True)
         _metrics['processes'] = norm[:4]
 
@@ -792,7 +761,7 @@ def _update_ui_for_current_page():
         return
 
     if _show_offline:
-        _ui['offline_url'].set_text(f"{SERVER.rstrip('/')}/api/gpu-data")
+        _ui['offline_url'].set_text(f"{SERVER.rstrip('/')}{API_PATH}")
         _ui['offline_screen'].clear_flag(lv.obj.FLAG.HIDDEN)
     else:
         _ui['offline_screen'].add_flag(lv.obj.FLAG.HIDDEN)
@@ -856,7 +825,7 @@ def _update_ui_for_current_page():
             f"PCIe: Gen{pcie_gen}x{pcie_width} (max Gen{pcie_gen_max}x{pcie_width_max})",
             f"State: {pstate}",
             f"Throttle: {throttle}",
-            f"Daemon: v{daemon_version}/{daemon_backend} ({daemon_commit})",
+            f"nvstats: v{daemon_version}/{daemon_backend} ({daemon_commit})",
             f"App: {VERSION} ({GIT_COMMIT})",
         ]
         _ui['details_body'].set_text("\n".join(lines))

@@ -18,13 +18,10 @@ vobot-apps/
 │   ├── apps/
 │   │   └── proxmox/        # app package for device
 │   └── *.jpg               # screenshots
-├── nvtop/                   # nvtop (NVIDIA GPU monitor) project folder
+├── nvtop/                   # nvtop (GPU monitor) project folder
 │   ├── apps/
 │   │   └── nvtop/           # app package for device
 │   └── *.jpg                # screenshots
-├── nvtop-daemon/             # companion Linux daemon nvtop polls (not on-device)
-│   ├── vobot_gpu_daemon.py
-│   └── vobot-gpu-daemon.service
 ├── copilot/                  # GitHub Copilot billing dashboard project folder
 │   ├── apps/
 │   │   └── copilot/          # app package for device
@@ -68,14 +65,14 @@ See [proxmox/README.md](proxmox/README.md) for details.
 
 ### nvtop
 
-A live NVIDIA GPU monitor (utilization, memory, temperature, power, clocks, top processes) sourced from our own companion daemon (`nvtop-daemon/`) running on whatever Linux box actually has the GPU.
+A live GPU monitor (utilization, memory, temperature, power, clocks, top processes) sourced from [nvstats-service](https://github.com/DAE51D/nvstats-service) (its HTTP API), running on whatever Linux box actually has the GPU (NVIDIA or AMD).
 
 **Features:**
-- 4-page UI: Gauges, History (with 25/50/75% gridlines), Details (clocks/PCIe/throttle + daemon & app build commit), Processes
+- 4-page UI: Gauges, History (with 25/50/75% gridlines), Details (clocks/PCIe/throttle + nvstats & app build commit), Processes
 - Processes page shows full CLI args per process, one flag per line, with its own encoder-scroll mode (press ENTER to toggle)
 - Gauges/History auto-cycle; Details/Processes are manual-only detours
 
-See [nvtop/README.md](nvtop/README.md) for the app and [nvtop-daemon/README.md](nvtop-daemon/README.md) for the companion daemon (not a Vobot app — runs on the GPU host).
+See [nvtop/README.md](nvtop/README.md) for the app. The GPU host runs [nvstats-service](https://github.com/DAE51D/nvstats-service) (not a Vobot app); the same service also feeds the knvtop and onvtop clients.
 
 ### copilot
 
