@@ -55,6 +55,7 @@ Notes for parsing on-device:
 - Any field can be `null` (e.g. `fan_pct`/`power_cap_w` on AMD APUs, `gpu_pct` for NVIDIA processes): treat every field as optional and default sensibly rather than erroring.
 - `throttle` is a human string (`"None"` when healthy, comma-joined reason names otherwise); it can be long, so truncate or scroll it.
 - AMD APUs report GTT as memory so totals look huge (e.g. 78 GB); that is expected.
+- `sys.cpu` (host CPU %) is the only `sys` field in the minimal view; it feeds the CPU history line.
 - Top-level `version`/`git_commit` identify the nvstats build running on the host (shown on the Details page).
 
 ## Goal — app structure
@@ -69,9 +70,9 @@ A 4-page app (scroll wheel cycles pages manually; Gauges/History also auto-cycle
 - Header label: GPU name + driver version
 
 **Page 2 — History chart**
-- Rolling line chart (`lv.chart`, LVGL 9.1 — see copilot app's stacked-chart notes for `TYPE.LINE` vs `TYPE.BAR` being per-chart not per-series) of GPU utilization % and memory utilization % over the last N samples
+- Rolling line chart (`lv.chart`, LVGL 9.1 — see copilot app's stacked-chart notes for `TYPE.LINE` vs `TYPE.BAR` being per-chart not per-series) of five series, matching knvtop/onvtop (colors and scales): GPU % (#4d9fff), MEM = mem_used/mem_total % (#e8c33a), temp raw 0-100 (#b07fe8), power as % of `power_cap_w` or of 100 W (#3ddc84), host CPU % from `sys.cpu` (#ff8c42), over the last N samples
 - 30-sample rolling window, about 150s at the default 5s poll interval (keep the buffer small for the memory-constrained device)
-- Y axis 0–100 (both series are already percentages, so no dual-axis complexity needed here — simpler than the copilot app's bar+line overlay)
+- Y axis 0–100 (every series is a percentage or a 0-100 value, so no dual-axis complexity)
 
 **Page 3 — Details**
 - Clocks: graphics/SM (`clock_gfx`) and memory (`clock_mem`), each with their `clock_*_max` as a "/max" suffix

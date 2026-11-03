@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
@@ -45,13 +45,16 @@ _show_offline = False  # debounced flag that actually drives the OFFLINE indicat
 OFFLINE_FAIL_THRESHOLD = 2  # consecutive failures required before showing OFFLINE; a lone blip shouldn't flash it
 _hist_util = []
 _hist_mem = []
-_hist_mem_activity = []
+_hist_temp = []
+_hist_power = []
+_hist_cpu = []
 _metrics = {
     'name': '',
     'driver': '',
     'util': 0,
     'mem_pct': 0,
     'mem_activity': 0,
+    'cpu': 0,
     'mem_used_gb': 0.0,
     'mem_total_gb': 0.0,
     'temp': 0,
@@ -179,10 +182,13 @@ def _clear_telemetry():
     """Drop stale values so charts and gauges never imply an offline GPU is active."""
     _hist_util.clear()
     _hist_mem.clear()
-    _hist_mem_activity.clear()
+    _hist_temp.clear()
+    _hist_power.clear()
+    _hist_cpu.clear()
     _metrics['util'] = 0
     _metrics['mem_pct'] = 0
     _metrics['mem_activity'] = 0
+    _metrics['cpu'] = 0
     _metrics['mem_used_gb'] = 0.0
     _metrics['mem_total_gb'] = 0.0
     _metrics['temp'] = 0
@@ -198,7 +204,7 @@ def _clear_telemetry():
 
 async def fetch_gpu_data():
     """Fetch the minimal GPU sample from the configured nvstats-service."""
-    global _metrics, _hist_util, _hist_mem, _hist_mem_activity
+    global _metrics, _hist_util, _hist_mem, _hist_temp, _hist_power, _hist_cpu
 
     headers = {
         "Accept": "application/json",
@@ -267,15 +273,20 @@ async def fetch_gpu_data():
         norm.sort(key=lambda item: item.get('gpu_mem_mib') or 0, reverse=True)
         _metrics['processes'] = norm[:4]
 
-        _hist_util.append(_metrics['util'])
-        _hist_mem.append(_metrics['mem_pct'])
-        _hist_mem_activity.append(_metrics['mem_activity'])
-        if len(_hist_util) > HISTORY_POINTS:
-            _hist_util.pop(0)
-        if len(_hist_mem) > HISTORY_POINTS:
-            _hist_mem.pop(0)
-        if len(_hist_mem_activity) > HISTORY_POINTS:
-            _hist_mem_activity.pop(0)
+        _metrics['cpu'] = float((data.get('sys') or {}).get('cpu') or 0)
+        # Same five series and scales as knvtop/onvtop: GPU %, MEM %, temp (0-100 C),
+        # power as % of the power cap (of 100 W when there is no cap), host CPU %.
+        pwr_pct = _metrics['power_draw'] * 100 / (_metrics['power_limit'] or 100)
+        for hist, v in (
+            (_hist_util, _metrics['util']),
+            (_hist_mem, _metrics['mem_pct']),
+            (_hist_temp, _metrics['temp']),
+            (_hist_power, min(100, pwr_pct)),
+            (_hist_cpu, _metrics['cpu']),
+        ):
+            hist.append(v)
+            if len(hist) > HISTORY_POINTS:
+                hist.pop(0)
 
         _mark_fetch_result(True)
         return True
@@ -383,6 +394,12 @@ def _ensure_styles():
         'c_accent': lv.color_hex(0x76B900),  # NVIDIA-ish green, matches the app icon
         'c_orange': lv.color_hex(0xFFA500),
         'c_blue': lv.color_hex(0x58A6FF),
+        # History line colors, shared with knvtop and onvtop
+        'h_gpu': lv.color_hex(0x4D9FFF),
+        'h_mem': lv.color_hex(0xE8C33A),
+        'h_temp': lv.color_hex(0xB07FE8),
+        'h_power': lv.color_hex(0x3DDC84),
+        'h_cpu': lv.color_hex(0xFF8C42),
         'c_red': lv.color_hex(0xFF6B6B),
     }
 
@@ -492,20 +509,12 @@ def _ensure_ui():
     mem_usage_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
 
     # --- Page 1: History chart ---
-    hist_title_util = lv.label(page_history)
-    hist_title_util.set_text("GPU %")
-    hist_title_util.align(lv.ALIGN.TOP_LEFT, 4, 4)
-    hist_title_util.set_style_text_color(_styles['c_accent'], 0)
-
-    hist_title_mem = lv.label(page_history)
-    hist_title_mem.set_text("MEM Used %")
-    hist_title_mem.align(lv.ALIGN.TOP_RIGHT, -4, 4)
-    hist_title_mem.set_style_text_color(_styles['c_orange'], 0)
-
-    hist_title_act = lv.label(page_history)
-    hist_title_act.set_text("MEM Activity %")
-    hist_title_act.align(lv.ALIGN.TOP_MID, -20, 4)  # nudge left so it clears "MEM Used %"
-    hist_title_act.set_style_text_color(_styles['c_blue'], 0)
+    for _i, (_txt, _key) in enumerate((("GPU", 'h_gpu'), ("MEM", 'h_mem'), ("TMP", 'h_temp'),
+                                      ("PWR", 'h_power'), ("CPU", 'h_cpu'))):
+        _lbl = lv.label(page_history)
+        _lbl.set_text(_txt)
+        _lbl.align(lv.ALIGN.TOP_LEFT, 6 + _i * 62, 4)
+        _lbl.set_style_text_color(_styles[_key], 0)
 
     chart = lv.chart(page_history)
     chart.set_pos(2, 25)
@@ -544,9 +553,11 @@ def _ensure_ui():
         gridline.clear_flag(lv.obj.FLAG.SCROLLABLE)
         gridline.clear_flag(lv.obj.FLAG.CLICKABLE)
 
-    util_series = chart.add_series(_styles['c_accent'], lv.chart.AXIS.PRIMARY_Y)
-    mem_series = chart.add_series(_styles['c_orange'], lv.chart.AXIS.PRIMARY_Y)
-    mem_act_series = chart.add_series(_styles['c_blue'], lv.chart.AXIS.PRIMARY_Y)
+    util_series = chart.add_series(_styles['h_gpu'], lv.chart.AXIS.PRIMARY_Y)
+    mem_series = chart.add_series(_styles['h_mem'], lv.chart.AXIS.PRIMARY_Y)
+    temp_series = chart.add_series(_styles['h_temp'], lv.chart.AXIS.PRIMARY_Y)
+    power_series = chart.add_series(_styles['h_power'], lv.chart.AXIS.PRIMARY_Y)
+    cpu_series = chart.add_series(_styles['h_cpu'], lv.chart.AXIS.PRIMARY_Y)
 
     # --- Page 2: Details ---
     details_header = lv.label(page_details)
@@ -639,7 +650,9 @@ def _ensure_ui():
         'chart': chart,
         'util_series': util_series,
         'mem_series': mem_series,
-        'mem_act_series': mem_act_series,
+        'temp_series': temp_series,
+        'power_series': power_series,
+        'cpu_series': cpu_series,
         'details_header': details_header,
         'details_body': details_body,
         'process_header': process_header,
@@ -675,37 +688,29 @@ def _set_page_visible(page_index):
 
 
 def _fill_history_chart():
-    """Push the rolling util/mem history buffers into the Page 1 chart series."""
+    """Push the rolling history buffers into the Page 1 chart series."""
+    chart = _ui['chart']
+    series = (
+        (_ui['util_series'], _hist_util),
+        (_ui['mem_series'], _hist_mem),
+        (_ui['temp_series'], _hist_temp),
+        (_ui['power_series'], _hist_power),
+        (_ui['cpu_series'], _hist_cpu),
+    )
     n = len(_hist_util)
-    if n <= 0:
-        for i in range(HISTORY_POINTS):
-            _ui['chart'].set_value_by_id(_ui['util_series'], i, 0)
-            _ui['chart'].set_value_by_id(_ui['mem_series'], i, 0)
-            _ui['chart'].set_value_by_id(_ui['mem_act_series'], i, 0)
-        if hasattr(_ui['chart'], 'refresh'):
-            _ui['chart'].refresh()
-        return
-
-    # Right-align history so newest points appear at the right edge.
+    # Right-align history so newest points appear at the right edge; before
+    # the first sample every point is 0.
     pad = HISTORY_POINTS - n
-    for i in range(HISTORY_POINTS):
-        src = i - pad
-        if src < 0:
-            util_v = int(_hist_util[0])
-            mem_v = int(_hist_mem[0])
-            mem_act_v = int(_hist_mem_activity[0]) if _hist_mem_activity else 0
-        else:
-            util_v = int(_hist_util[src])
-            mem_v = int(_hist_mem[src])
-            if src < len(_hist_mem_activity):
-                mem_act_v = int(_hist_mem_activity[src])
+    for ser, hist in series:
+        for i in range(HISTORY_POINTS):
+            src = i - pad
+            if n <= 0:
+                v = 0
             else:
-                mem_act_v = 0
-        _ui['chart'].set_value_by_id(_ui['util_series'], i, util_v)
-        _ui['chart'].set_value_by_id(_ui['mem_series'], i, mem_v)
-        _ui['chart'].set_value_by_id(_ui['mem_act_series'], i, mem_act_v)
-    if hasattr(_ui['chart'], 'refresh'):
-        _ui['chart'].refresh()
+                v = int(hist[src if src >= 0 else 0])
+            chart.set_value_by_id(ser, i, v)
+    if hasattr(chart, 'refresh'):
+        chart.refresh()
 
 
 def _format_process_block(p):

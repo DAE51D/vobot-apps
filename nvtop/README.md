@@ -9,7 +9,7 @@ A MicroPython GPU monitor for the Vobot Mini Dock.
 The app currently provides a 4-page UI:
 
 - Gauges page with GPU, memory, temperature, and power/memory bars
-- History page with GPU, memory-used, and memory-activity trend lines plus 25/50/75% gridlines (30 samples, about 150 seconds at the default poll interval)
+- History page with GPU, memory, temperature, power, and CPU trend lines (same five lines and colors as knvtop and onvtop) plus 25/50/75% gridlines (30 samples, about 150 seconds at the default poll interval)
 - Details page with clocks, PCIe info, performance state, throttle reasons, and nvstats/app build info
 - Processes page listing the top GPU-memory processes, with full command-line args and its own encoder-driven scroll mode
 
@@ -21,7 +21,7 @@ Gauges/History auto-cycle between themselves; Details/Processes are manual-only 
 - Live VRAM utilization gauge
 - Temperature gauge with hot-state color change
 - Power draw bar and memory usage bar
-- Rolling history chart for GPU %, memory-used %, and memory-activity %, with 25/50/75% gridlines and a 0%/100% border
+- Rolling history chart for GPU %, memory %, temperature, power (% of cap), and host CPU %, with 25/50/75% gridlines and a 0%/100% border
 - Details page with clocks, PCIe link, P-state, throttle reason text, and the service's + app's git commit (so you always know what's actually running)
 - Processes page: top GPU-memory processes, each showing `argv0`, `GPU/CPU/PID`, and every CLI flag on its own line, separated by a rule; press **ENTER** to toggle a content-scroll mode where the encoder scrolls the list instead of paging apps (press **ENTER** or **ESC** to exit back to normal paging)
 - Configurable polling interval and page auto-cycle
@@ -139,8 +139,7 @@ When in doubt, Thonny file upload is still the least annoying option on Windows.
 #### History
 
 - GPU percent trend line
-- Memory-used percent trend line
-- Memory-activity percent trend line
+- Memory-used percent, temperature (0-100 °C), power (% of cap) and host CPU percent trend lines
 - 25/50/75% horizontal gridlines, 0%/100% framed by the chart border
 
 #### Details
@@ -203,7 +202,7 @@ curl http://proxmox.home.lan:8039/api/v1/sample
 
 ## Technical Details
 
-- **Version:** 1.1.0
+- **Version:** 1.2.0
 - **Platform:** ESP32-S3 (MicroPython)
 - **UI Framework:** LVGL
 - **Dependencies:** `urequests`, `utime`, `lvgl`, `peripherals`
