@@ -30,7 +30,6 @@ Thumbs.db
 /dock-app-bundler-win.exe
 
 /*.zip
-*.vbt
 /*.url
 /.venv
 .claude/settings.json
