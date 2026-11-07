@@ -1,6 +1,6 @@
 application:
   name: nvtop
-  version: 1.2.0
+  version: 1.2.1
   category: Utility
   icon: A:apps/nvtop/resources/icon.png
   description: Live GPU stats (utilization, memory, temp, power, clocks) via nvstats-service

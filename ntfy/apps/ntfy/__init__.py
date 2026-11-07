@@ -24,7 +24,7 @@ CAN_BE_AUTO_SWITCHED = True
 
 NTFY_SERVER = "http://ntfy.home.lan"
 NTFY_TOPIC = "general"  # Comma-separated topics (ntfy requires at least one)
-MAX_MESSAGES = 5
+MAX_MESSAGES = 50  # cache size; ntfy ?since= returns up to this many per topic
 CONNECTION_MODE = "long-poll"  # polling | long-poll
 fetch_interval = 10
 
@@ -691,7 +691,8 @@ async def on_running_foreground():
                             messages = unique_new + messages
                             messages = messages[:MAX_MESSAGES]
                         else:
-                            # Polling: take last MAX_MESSAGES from fetch
+                            # Polling: take the latest MAX_MESSAGES from the server response
+                            # (new_messages is oldest-first; slice the tail, then reverse to newest-first)
                             messages = new_messages[-MAX_MESSAGES:]
                             messages.reverse()  # Newest first
 
@@ -778,11 +779,11 @@ def get_settings_json():
             },
             {
                 "type": "input",
-                "default": "5",
+                "default": "50",
                 "caption": "Max Cached Messages",
                 "name": "max_messages",
-                "attributes": {"maxLength": 2, "placeholder": "5"},
-                "tip": "Maximum number of messages to cache (1-20)"
+                "attributes": {"maxLength": 2, "placeholder": "50"},
+                "tip": "Maximum number of messages to cache per topic (1-50)"
             },
             {
                 "type": "select",

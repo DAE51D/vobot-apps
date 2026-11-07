@@ -6,7 +6,7 @@ import utime
 # Note the case-sensitivity of this {NAME} when constructing the f'A:apps/{NAME}/resources/
 # https://dock.myvobot.com/developer/getting_started/#important-resource-file-path-configuration
 NAME = "nvtop"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 __version__ = VERSION
 GIT_COMMIT = "unknown"  # stamped at deploy time from `git rev-parse --short HEAD`
 ICON = "A:apps/nvtop/resources/icon.png"
@@ -500,7 +500,7 @@ def _ensure_ui():
     power_bar.set_style_bg_color(_styles['c_dark'], lv.PART.MAIN)
     power_bar.set_style_bg_color(_styles['c_accent'], lv.PART.INDICATOR)
     mem_usage_label = lv.label(br)
-    mem_usage_label.align(lv.ALIGN.TOP_LEFT, 6, 52)
+    mem_usage_label.align(lv.ALIGN.TOP_LEFT, 0, 52)
     mem_usage_label.set_style_text_color(_styles['c_white'], 0)
     mem_usage_bar = lv.bar(br)
     mem_usage_bar.set_size(135, 12)
@@ -791,8 +791,10 @@ def _update_ui_for_current_page():
         temp_color = _styles['c_red'] if temp >= 80 else _styles['c_accent']
         _ui['temp_arc'].set_style_arc_color(temp_color, lv.PART.INDICATOR)
 
-        power_pct = int((power_draw * 100) / power_limit) if power_limit > 0 else 0
-        _ui['power_label'].set_text(f"Power: {power_draw:.0f}/{power_limit:.0f}W")
+        power_pct = int((power_draw * 100) / (power_limit or 100))
+        power_text = (f"Power: {power_draw:.0f}/{power_limit:.0f}W"
+                  if power_limit > 0 else f"Power: {power_draw:.0f}W")
+        _ui['power_label'].set_text(power_text)
         _ui['power_bar'].set_value(min(100, power_pct), lv.ANIM.OFF)
 
         _ui['mem_usage_label'].set_text(f"Mem: {mem_used_gb:.1f}/{mem_total_gb:.1f}G")
